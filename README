@@ -1,0 +1,18 @@
+jpt - Junoplay Table
+====================
+
+A database designed for use from applications, similar to Berkeley DB.
+
+The interface is designed to be very straightforward to use, requiring only a
+call to "init", "insert" and "close" to create a database file and insert a
+value into it.
+
+Each database is represented by a single sparse table, that can have up to
+2^32 (4 billion) columns and an "arbitrary" number of rows.
+
+The database employs PATRICIA tries and bloom filters for fast data
+retrieval.  Newly inserted data is buffered in a splay tree (as well as a
+linear transaction log file) for fast data storage.
+
+Unlike most databases, jpt supports the "append" operation, making it suited
+to build indexes.
