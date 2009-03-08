@@ -998,11 +998,7 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   info->is_writing = 1;
 
   if(-1 == JPT_log_replay(info))
-  {
-    fprintf(stderr, "jpt: log replay failed\n");
-
     goto fail;
-  }
 
   info->is_writing = 0;
 
@@ -1343,9 +1339,6 @@ jpt_major_compact(struct JPT_info* info)
 
   JPT_clear_error();
 
-  if(info->disktable_count < 2)
-    return 0;
-
   JPT_writer_enter(info);
 
   if(-1 == JPT_compact(info))
@@ -1354,6 +1347,14 @@ jpt_major_compact(struct JPT_info* info)
 
     return -1;
   }
+
+  if(info->disktable_count < 2)
+  {
+    JPT_write_leave(info);
+
+    return 0;
+  }
+
 
   newname = alloca(strlen(info->filename) + 8);
   strcpy(newname, info->filename);
@@ -2138,8 +2139,8 @@ JPT_log_replay(struct JPT_info* info)
 
   if(info->file_size < old_size)
   {
-    fprintf(stderr, "jpt: log file's record of database size (%llu) is larger than actual size (%llu)\n",
-            (unsigned long long) old_size, (unsigned long long) info->file_size);
+    asprintf(&JPT_last_error, "log file's record of database size (%llu) is larger than actual size (%llu)",
+             (unsigned long long) old_size, (unsigned long long) info->file_size);
     errno = EINVAL;
 
     return -1;
@@ -2148,10 +2149,12 @@ JPT_log_replay(struct JPT_info* info)
   if(size == sizeof(uint64_t))
     return 0;
 
-  // fprintf(stderr, "jpt: last session terminated abnormally, replaying log...\n");
-
   if(-1 == ftruncate(info->fd, old_size))
+  {
+    asprintf(&JPT_last_error, "ftruncate(fd, %llu) failed during log replay: %s", (unsigned long long) old_size, strerror(errno));
+
     return -1;
+  }
 
   while(!feof(info->logfile))
   {
@@ -2177,7 +2180,11 @@ JPT_log_replay(struct JPT_info* info)
       value = malloc(value_size);
 
       if(!row || !col || !value)
+      {
+        asprintf(&JPT_last_error, "malloc failed during log replay: %s", strerror(errno));
+
         goto fail;
+      }
 
       if(rowlen != fread(row, 1, rowlen, info->logfile)
       || collen != fread(col, 1, collen, info->logfile)
@@ -2187,8 +2194,12 @@ JPT_log_replay(struct JPT_info* info)
       row[rowlen] = 0;
       col[collen] = 0;
 
-      if(-1 == JPT_insert(info, row, col, value, value_size, &timestamp, flags))
+      if(-1 == JPT_insert(info, row, col, value, value_size, &timestamp, flags) && errno != EEXIST)
+      {
+        asprintf(&JPT_last_error, "insert failed during log replay: %s", strerror(errno));
+
         goto fail;
+      }
 
       free(row); row = 0;
       free(col); col = 0;
@@ -2263,7 +2274,7 @@ JPT_log_replay(struct JPT_info* info)
     }
     else
     {
-      fprintf(stderr, "jpt: unexpected command %d in log file\n", command);
+      asprintf(&JPT_last_error, "unexpected command %d in log file", command);
 
       goto fail;
     }
