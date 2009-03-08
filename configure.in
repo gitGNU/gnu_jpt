@@ -8,4 +8,4 @@ AC_PROG_MAKE_SET
 
 AC_CONFIG_SUBDIRS([php])
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT([tests/Makefile Makefile])
