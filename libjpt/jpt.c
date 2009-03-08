@@ -325,8 +325,19 @@ JPT_buffer_alloc(struct JPT_info* info, size_t size)
 {
   void* result;
 
-  assert(info->buffer);
   assert(info->is_writing || info->reader_count);
+
+  if(!info->buffer)
+  {
+    info->buffer = malloc(info->buffer_size);
+
+    if(!info->buffer)
+    {
+      asprintf(&JPT_last_error, "Failed to allocate %zu bytes for memtable: %s", info->buffer_size, strerror(errno));
+
+      return 0;
+    }
+  }
 
   result = info->buffer + info->buffer_util;
   info->buffer_util = (info->buffer_util + size + 3) & ~3;
@@ -983,7 +994,7 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   }
 
   info->buffer_size = buffer_size;
-  info->buffer = malloc(buffer_size);
+  info->buffer = 0;
   info->filename = strdup(filename);
 
   info->column_count = 128;
@@ -1237,6 +1248,8 @@ JPT_compact(struct JPT_info* info)
   free(nodes);
   free(key_infos);
 
+  free(info->buffer);
+  info->buffer = 0;
   info->buffer_util = 0;
   info->root = 0;
   info->node_count = 0;
