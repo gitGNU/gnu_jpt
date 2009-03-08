@@ -6,7 +6,7 @@ noinst_PROGRAMS = stress-test
 noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
 
 AM_CFLAGS = -g -Wall -pthread
-AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -Ilibjpt -Ijptl
+AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/jptl
 
 jpt_control_SOURCES = jpt-control.c
 jpt_control_LDADD = -ljpt
