@@ -9,3 +9,6 @@
 .libs
 Makefile
 libtool
+jpt-control
+djptd
+stress-test

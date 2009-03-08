@@ -1,11 +1,12 @@
-bin_PROGRAMS = jpt-control
-lib_LTLIBRARIES = libjpt.la
-include_HEADERS = jpt.h
+bin_PROGRAMS = jpt-control djptd
+lib_LTLIBRARIES = libjpt.la libdjpt.la
+include_HEADERS = libjpt/jpt.h djpt/djpt.h
 
 noinst_PROGRAMS = stress-test
+noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
 
 AM_CFLAGS = -g -Wall -pthread
-AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -Ilibjpt
+AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -Ilibjpt -Ijptl
 
 jpt_control_SOURCES = jpt-control.c
 jpt_control_LDADD = -ljpt
@@ -13,6 +14,20 @@ jpt_control_LDADD = -ljpt
 stress_test_SOURCES = stress-test.c
 stress_test_LDADD = -ljpt
 
-libjpt_la_SOURCES = libjpt/jpt_backup.c libjpt/jpt_disktable.c \
-	libjpt/jpt_internal.h libjpt/jpt_memtable.c libjpt/jpt_io.c libjpt/jpt.c \
-	libjpt/patricia.c libjpt/patricia.h
+libjpt_la_SOURCES = 
+
+libjpt_common_la_SOURCES = \
+	libjpt/jpt_backup.c libjpt/jpt_disktable.c libjpt/jpt_internal.h \
+	libjpt/jpt_memtable.c libjpt/jpt_io.c libjpt/jpt.c libjpt/patricia.c \
+	libjpt/patricia.h jptl/jptl.c jptl/jptl.h
+
+libdjpt_common_la_SOURCES = djpt/djpt_common.c 
+libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h
+djptd_SOURCES = djpt/djpt_internal.h djpt/djptd.c
+
+libjpt_la_LIBADD = libjpt-common.la
+djptd_LDADD = libdjpt-common.la libjpt-common.la
+libdjpt_la_LIBADD = libdjpt-common.la -ljpt
+
+libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
+libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0

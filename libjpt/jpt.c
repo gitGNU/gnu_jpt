@@ -1350,7 +1350,7 @@ jpt_major_compact(struct JPT_info* info)
 
   if(info->disktable_count < 2)
   {
-    JPT_write_leave(info);
+    JPT_writer_leave(info);
 
     return 0;
   }
