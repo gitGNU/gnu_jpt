@@ -162,6 +162,9 @@ jpt_has_column(struct JPT_info* info, const char* column);
  * Retrieves a value from from a given cell.
  *
  * The value is allocated using malloc, and must be freed by the caller.
+ *
+ * For convenience, a NUL byte is always placed just beyond the end of the
+ * value, in case you are trying to fetch a NUL-terminated string.
  */
 int
 jpt_get(struct JPT_info* info, const char* row, const char* column,
