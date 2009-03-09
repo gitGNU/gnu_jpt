@@ -46,6 +46,7 @@ help(const char* argv0)
          "     lookup ROW COLUMN      searches for the given pattern\n"
          "     dump [COLUMN]          prints row-value pairs for an entire \n"
          "                            table or column\n"
+         "     compact                performs a compaction\n"
          "     major-compact          performs a major compaction\n"
          "     recover                removes incomplete data\n"
          "     info                   print meta-information\n"
@@ -378,6 +379,17 @@ main(int argc, char** argv)
       jpt_column_scan(table, argv[optind + 2], data_callback, 0);
     else
       jpt_scan(table, data_callback, 0);
+  }
+  else if(!strcmp(argv[optind + 1], "compact"))
+  {
+    init_table(argv[optind]);
+
+    if(-1 == jpt_compact(table))
+    {
+      fprintf(stderr, "Compaction failed: %s\n", jpt_last_error());
+
+      return EXIT_FAILURE;
+    }
   }
   else if(!strcmp(argv[optind + 1], "major-compact"))
   {
