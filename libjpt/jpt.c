@@ -1,5 +1,5 @@
 /*  General jpt functions.
-    Copyright (C) 2007-2008  Morten Hustveit <morten@rashbox.org>
+    Copyright (C) 2007, 2008, 2009  Morten Hustveit <morten@rashbox.org>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -827,13 +827,14 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   if(info->fd == -1)
     goto fail;
 
-  if(-1 == lockf(info->fd, F_TLOCK, INT_MAX))
-    goto fail;
-
   if(-1 == asprintf(&logname, "%s.log", filename))
     goto fail;
 
-  info->logfile = fopen(logname, "a+");
+  if(-1 == lockf(info->logfd, F_TLOCK, (off_t) -1))
+    goto fail;
+
+  info->logfd = open(logname, O_RDWR | O_CREAT, 0600);
+  info->logfile = fdopen(info->logfd, "r+");
 
   if(!info->logfile)
     goto fail;

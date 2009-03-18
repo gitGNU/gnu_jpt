@@ -1,3 +1,21 @@
+/* Internal header for the jpt library.
+   Copyright (C) 2006 Morten Hustveit <morten@rashbox.org>
+
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public
+   License as publiched by the Free Software Foundation; either
+   version 3 of the License, or (at your option) any later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTIBILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received a copy of the GNU General Public
+   License along with this library; if not, write to the Free
+   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+   02111-1307 USA.  */
+
 #ifndef JPT_INTERNAL_H_
 #define JPT_INTERNAL_H_ 1
 
@@ -64,6 +82,7 @@ struct JPT_info
 
   char* filename;
   int fd;
+  int logfd;
   FILE* logfile;
   int logfile_empty;
 
