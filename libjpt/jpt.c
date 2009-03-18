@@ -830,7 +830,7 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   if(-1 == asprintf(&logname, "%s.log", filename))
     goto fail;
 
-  if(-1 == lockf(info->logfd, F_TLOCK, (off_t) -1))
+  if(-1 == lockf(info->logfd, F_TLOCK, INT_MAX))
     goto fail;
 
   info->logfd = open(logname, O_RDWR | O_CREAT, 0600);
