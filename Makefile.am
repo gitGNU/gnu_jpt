@@ -19,8 +19,8 @@ stress_test_LDADD = libjpt.la
 libjpt_la_SOURCES = 
 
 libjpt_common_la_SOURCES = \
-	libjpt/jpt_backup.c libjpt/jpt_disktable.c libjpt/jpt_internal.h \
-	libjpt/jpt_memtable.c libjpt/jpt_io.c libjpt/jpt.c libjpt/patricia.c \
+	libjpt/backup.c libjpt/disktable.c libjpt/jpt_internal.h \
+	libjpt/memtable.c libjpt/io.c libjpt/jpt.c libjpt/patricia.c \
 	libjpt/patricia.h jptl/jptl.c jptl/jptl.h
 
 libdjpt_common_la_SOURCES = djpt/djpt_common.c 

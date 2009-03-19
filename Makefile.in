@@ -69,8 +69,8 @@ libdjpt_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(libdjpt_la_LDFLAGS) $(LDFLAGS) -o $@
 libjpt_common_la_LIBADD =
-am_libjpt_common_la_OBJECTS = jpt_backup.lo jpt_disktable.lo \
-	jpt_memtable.lo jpt_io.lo jpt.lo patricia.lo jptl.lo
+am_libjpt_common_la_OBJECTS = backup.lo disktable.lo memtable.lo io.lo \
+	jpt.lo patricia.lo jptl.lo
 libjpt_common_la_OBJECTS = $(am_libjpt_common_la_OBJECTS)
 libjpt_la_DEPENDENCIES = libjpt-common.la
 am_libjpt_la_OBJECTS =
@@ -253,8 +253,8 @@ stress_test_SOURCES = stress-test.c
 stress_test_LDADD = libjpt.la
 libjpt_la_SOURCES = 
 libjpt_common_la_SOURCES = \
-	libjpt/jpt_backup.c libjpt/jpt_disktable.c libjpt/jpt_internal.h \
-	libjpt/jpt_memtable.c libjpt/jpt_io.c libjpt/jpt.c libjpt/patricia.c \
+	libjpt/backup.c libjpt/disktable.c libjpt/jpt_internal.h \
+	libjpt/memtable.c libjpt/io.c libjpt/jpt.c libjpt/patricia.c \
 	libjpt/patricia.h jptl/jptl.c jptl/jptl.h
 
 libdjpt_common_la_SOURCES = djpt/djpt_common.c 
@@ -397,16 +397,16 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backup.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/disktable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djptd.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt-control.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt_backup.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt_disktable.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt_io.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt_memtable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jptl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memtable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/patricia.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stress-test.Po@am__quote@
 
@@ -445,33 +445,33 @@ djpt.lo: djpt/djpt.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djpt.lo `test -f 'djpt/djpt.c' || echo '$(srcdir)/'`djpt/djpt.c
 
-jpt_backup.lo: libjpt/jpt_backup.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT jpt_backup.lo -MD -MP -MF $(DEPDIR)/jpt_backup.Tpo -c -o jpt_backup.lo `test -f 'libjpt/jpt_backup.c' || echo '$(srcdir)/'`libjpt/jpt_backup.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/jpt_backup.Tpo $(DEPDIR)/jpt_backup.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/jpt_backup.c' object='jpt_backup.lo' libtool=yes @AMDEPBACKSLASH@
+backup.lo: libjpt/backup.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT backup.lo -MD -MP -MF $(DEPDIR)/backup.Tpo -c -o backup.lo `test -f 'libjpt/backup.c' || echo '$(srcdir)/'`libjpt/backup.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/backup.Tpo $(DEPDIR)/backup.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/backup.c' object='backup.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o jpt_backup.lo `test -f 'libjpt/jpt_backup.c' || echo '$(srcdir)/'`libjpt/jpt_backup.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o backup.lo `test -f 'libjpt/backup.c' || echo '$(srcdir)/'`libjpt/backup.c
 
-jpt_disktable.lo: libjpt/jpt_disktable.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT jpt_disktable.lo -MD -MP -MF $(DEPDIR)/jpt_disktable.Tpo -c -o jpt_disktable.lo `test -f 'libjpt/jpt_disktable.c' || echo '$(srcdir)/'`libjpt/jpt_disktable.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/jpt_disktable.Tpo $(DEPDIR)/jpt_disktable.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/jpt_disktable.c' object='jpt_disktable.lo' libtool=yes @AMDEPBACKSLASH@
+disktable.lo: libjpt/disktable.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT disktable.lo -MD -MP -MF $(DEPDIR)/disktable.Tpo -c -o disktable.lo `test -f 'libjpt/disktable.c' || echo '$(srcdir)/'`libjpt/disktable.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/disktable.Tpo $(DEPDIR)/disktable.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/disktable.c' object='disktable.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o jpt_disktable.lo `test -f 'libjpt/jpt_disktable.c' || echo '$(srcdir)/'`libjpt/jpt_disktable.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o disktable.lo `test -f 'libjpt/disktable.c' || echo '$(srcdir)/'`libjpt/disktable.c
 
-jpt_memtable.lo: libjpt/jpt_memtable.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT jpt_memtable.lo -MD -MP -MF $(DEPDIR)/jpt_memtable.Tpo -c -o jpt_memtable.lo `test -f 'libjpt/jpt_memtable.c' || echo '$(srcdir)/'`libjpt/jpt_memtable.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/jpt_memtable.Tpo $(DEPDIR)/jpt_memtable.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/jpt_memtable.c' object='jpt_memtable.lo' libtool=yes @AMDEPBACKSLASH@
+memtable.lo: libjpt/memtable.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memtable.lo -MD -MP -MF $(DEPDIR)/memtable.Tpo -c -o memtable.lo `test -f 'libjpt/memtable.c' || echo '$(srcdir)/'`libjpt/memtable.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/memtable.Tpo $(DEPDIR)/memtable.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/memtable.c' object='memtable.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o jpt_memtable.lo `test -f 'libjpt/jpt_memtable.c' || echo '$(srcdir)/'`libjpt/jpt_memtable.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memtable.lo `test -f 'libjpt/memtable.c' || echo '$(srcdir)/'`libjpt/memtable.c
 
-jpt_io.lo: libjpt/jpt_io.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT jpt_io.lo -MD -MP -MF $(DEPDIR)/jpt_io.Tpo -c -o jpt_io.lo `test -f 'libjpt/jpt_io.c' || echo '$(srcdir)/'`libjpt/jpt_io.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/jpt_io.Tpo $(DEPDIR)/jpt_io.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/jpt_io.c' object='jpt_io.lo' libtool=yes @AMDEPBACKSLASH@
+io.lo: libjpt/io.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT io.lo -MD -MP -MF $(DEPDIR)/io.Tpo -c -o io.lo `test -f 'libjpt/io.c' || echo '$(srcdir)/'`libjpt/io.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/io.Tpo $(DEPDIR)/io.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='libjpt/io.c' object='io.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o jpt_io.lo `test -f 'libjpt/jpt_io.c' || echo '$(srcdir)/'`libjpt/jpt_io.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o io.lo `test -f 'libjpt/io.c' || echo '$(srcdir)/'`libjpt/io.c
 
 jpt.lo: libjpt/jpt.c
 @am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT jpt.lo -MD -MP -MF $(DEPDIR)/jpt.Tpo -c -o jpt.lo `test -f 'libjpt/jpt.c' || echo '$(srcdir)/'`libjpt/jpt.c
