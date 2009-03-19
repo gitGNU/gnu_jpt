@@ -1579,6 +1579,9 @@ jpt_major_compact(struct JPT_info* info)
     info->map_size = 0;
   }
 
+  if(-1 == fsync(outfd))
+    goto fail;
+
   if(-1 == rename(newname, info->filename))
     goto fail;
 
