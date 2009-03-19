@@ -824,6 +824,9 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   info->flags = flags;
   info->fd = open(filename, O_RDWR | O_CREAT, 0600);
 
+  if(-1 == lockf(info->fd, F_TLOCK, INT_MAX))
+    goto fail;
+
   if(info->fd == -1)
     goto fail;
 
@@ -2301,7 +2304,7 @@ JPT_log_replay(struct JPT_info* info)
 
 truncate:
 
-  ftruncate(fileno(info->logfile), last_valid);
+  ftruncate(info->logfd, last_valid);
   rewind(info->logfile);
 
   result = 0;
@@ -2318,15 +2321,12 @@ fail:
 static int
 JPT_log_reset(struct JPT_info* info)
 {
-  int fd;
-
-  rewind(info->logfile);
-  fd = fileno(info->logfile);
-
-  if(-1 == ftruncate(fd, 0))
+  if(-1 == ftruncate(info->logfd, 0))
     return -1;
 
-  fdatasync(fd);
+  rewind(info->logfile);
+
+  fdatasync(info->logfd);
   info->logfile_empty = 1;
 
   return 0;
