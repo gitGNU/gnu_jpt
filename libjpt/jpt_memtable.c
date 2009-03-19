@@ -63,7 +63,6 @@ JPT_memtable_list_all(struct JPT_node* n, struct JPT_node*** nodes)
   }
 }
 
-#include <stdio.h>
 static void
 JPT_memtable_list_column_left(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx)
 {
