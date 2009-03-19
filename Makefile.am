@@ -11,10 +11,10 @@ AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/jptl
 
 jpt_control_SOURCES = jpt-control.c
-jpt_control_LDADD = -ljpt
+jpt_control_LDADD = libjpt.la
 
 stress_test_SOURCES = stress-test.c
-stress_test_LDADD = -ljpt
+stress_test_LDADD = libjpt.la
 
 libjpt_la_SOURCES = 
 

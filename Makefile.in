@@ -85,10 +85,10 @@ djptd_OBJECTS = $(am_djptd_OBJECTS)
 djptd_DEPENDENCIES = libdjpt-common.la libjpt-common.la
 am_jpt_control_OBJECTS = jpt-control.$(OBJEXT)
 jpt_control_OBJECTS = $(am_jpt_control_OBJECTS)
-jpt_control_DEPENDENCIES =
+jpt_control_DEPENDENCIES = libjpt.la
 am_stress_test_OBJECTS = stress-test.$(OBJEXT)
 stress_test_OBJECTS = $(am_stress_test_OBJECTS)
-stress_test_DEPENDENCIES =
+stress_test_DEPENDENCIES = libjpt.la
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -248,9 +248,9 @@ SUBDIRS = tests php
 AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/jptl
 jpt_control_SOURCES = jpt-control.c
-jpt_control_LDADD = -ljpt
+jpt_control_LDADD = libjpt.la
 stress_test_SOURCES = stress-test.c
-stress_test_LDADD = -ljpt
+stress_test_LDADD = libjpt.la
 libjpt_la_SOURCES = 
 libjpt_common_la_SOURCES = \
 	libjpt/jpt_backup.c libjpt/jpt_disktable.c libjpt/jpt_internal.h \
