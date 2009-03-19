@@ -90,11 +90,11 @@ size_t test_count = 0;
 
 #define TOKEN_COUNT (sizeof(tokens) / sizeof(tokens[0]))
 
-#define WANT_POINTER(x) do { if( 0 == (x)) { fprintf(stderr, #x " failed unexpectedly: %s\n", jpt_last_error()); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
-#define WANT_SUCCESS(x) do { if(-1 == (x)) { fprintf(stderr, #x " failed unexpectedly: %s\n", jpt_last_error()); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
-#define WANT_FAILURE(x) do { if(-1 != (x)) { fprintf(stderr, #x " succeeded unexpectedly\n"); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
-#define WANT_TRUE(x)    do { if(!(x)) { fprintf(stderr, #x " was false, expected true\n"); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
-#define WANT_FALSE(x)   do { if((x)) { fprintf(stderr, #x " was true, expected false\n"); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
+#define WANT_POINTER(x) do { if( 0 == (x)) { fprintf(stderr, "\nTest %zu\n" #x " failed unexpectedly: %s\n", test_count, jpt_last_error()); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
+#define WANT_SUCCESS(x) do { if(-1 == (x)) { fprintf(stderr, "\nTest %zu\n" #x " failed unexpectedly: %s\n", test_count, jpt_last_error()); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
+#define WANT_FAILURE(x) do { if(-1 != (x)) { fprintf(stderr, "\nTest %zu\n" #x " succeeded unexpectedly\n", test_count); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
+#define WANT_TRUE(x)    do { if(!(x)) { fprintf(stderr, "\nTest %zu\n" #x " was false, expected true\n", test_count); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
+#define WANT_FALSE(x)   do { if((x)) { fprintf(stderr, "\nTest %zu\n" #x " was true, expected false\n", test_count); abort(); } pthread_mutex_lock(&counter_lock); ++test_count; pthread_mutex_unlock(&counter_lock); } while(0)
 
 struct value
 {
