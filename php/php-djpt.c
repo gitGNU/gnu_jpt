@@ -12,7 +12,7 @@
 
 #include "php-djpt.h"
 
-static struct 
+static struct
 {
   size_t refcount;
   char* database;
@@ -335,6 +335,7 @@ PHP_FUNCTION(djpt_column_scan)
 
   if(-1 == djpt_column_scan(handles[handle].info, column, column_scan_cell_callback, return_value, limit))
   {
+    zend_error(E_WARNING, "Error scanning column '%s': %s", column, djpt_last_error());
     zend_hash_destroy(Z_ARRVAL_P(return_value));
     efree(Z_ARRVAL_P(return_value));
     RETURN_FALSE;
