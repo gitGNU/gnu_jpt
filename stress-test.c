@@ -110,7 +110,7 @@ static pthread_mutex_t counter_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct JPT_info* db;
 
-static pthread_t threads[1];
+static pthread_t threads[2];
 
 static int done;
 
@@ -278,7 +278,15 @@ test_thread(void* arg)
       {
         if(v->data)
         {
-          WANT_FAILURE(jpt_insert(db, tokens[row], tokens[col], tokens[token], tokenlen, 0));
+          int has_key = jpt_has_key(db, tokens[row], tokens[col]);
+
+          if(0 == jpt_insert(db, tokens[row], tokens[col], tokens[token], tokenlen, 0))
+          {
+            fprintf(stderr, "jpt_insert of \"%s\", \"%s\" succeeded unexpectedly.  Has key: %d\n",
+                    tokens[row], tokens[col], has_key);
+
+            exit(EXIT_FAILURE);
+          }
         }
         else
         {
@@ -329,11 +337,11 @@ test_thread(void* arg)
         values[i][col].size = 0;
       }
     }
-    else if((rand_r(&seed) % 1000) == 0)
+    else if((rand_r(&seed) % 3000) == 0)
     {
-      //WANT_SUCCESS(jpt_compact(db));
+      WANT_SUCCESS(jpt_compact(db));
     }
-    else if((rand_r(&seed) % 10000) == 0)
+    else if((rand_r(&seed) % 30000) == 0)
     {
       WANT_SUCCESS(jpt_major_compact(db));
     }
