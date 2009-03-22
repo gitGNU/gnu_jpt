@@ -40,7 +40,7 @@
 #define JPT_SIGNATURE     "LBAT"
 #define JPT_VERSION       8
 
-/* #define TRACE(x) fprintf x ; fflush(stderr); */
+#define TRACE(x) fprintf x ; fflush(stderr);
 
 #ifndef TRACE
 #define TRACE(x)
@@ -82,8 +82,8 @@ jpt_gettime()
 #define JPT_ESHORTREAD 1
 #define JPT_EVERSION   2
 
-static __thread int JPT_errno = 0;
-static __thread char* JPT_last_error = 0;
+__thread int JPT_errno = 0;
+__thread char* JPT_last_error = 0;
 
 #define GLOBAL_LOCKS 0
 
@@ -320,33 +320,6 @@ JPT_clear_error()
   JPT_last_error = 0;
 }
 
-static void*
-JPT_buffer_alloc(struct JPT_info* info, size_t size)
-{
-  void* result;
-
-  assert(info->is_writing || info->reader_count);
-
-  if(!info->buffer)
-  {
-    info->buffer = malloc(info->buffer_size);
-
-    if(!info->buffer)
-    {
-      asprintf(&JPT_last_error, "Failed to allocate %zu bytes for memtable: %s", info->buffer_size, strerror(errno));
-
-      return 0;
-    }
-  }
-
-  result = info->buffer + info->buffer_util;
-  info->buffer_util = (info->buffer_util + size + 3) & ~3;
-
-  assert(info->buffer_util <= info->buffer_size);
-
-  return result;
-}
-
 static uint32_t
 JPT_get_column_idx(struct JPT_info* info, const char* column, int flags)
 {
@@ -506,183 +479,6 @@ JPT_get_column_name(struct JPT_info* info, uint32_t columnidx)
     return 0;
 
   return result;
-}
-
-static struct JPT_node*
-JPT_create_node(struct JPT_info* info,
-                const void* row, uint32_t columnidx,
-                const void* value, size_t value_size,
-                int must_compact)
-{
-  struct JPT_node* result;
-
-  assert(info->is_writing || info->reader_count);
-
-  result = JPT_buffer_alloc(info, sizeof(struct JPT_node));
-  result->row = JPT_buffer_alloc(info, strlen(row) + 1);
-  result->value_size = value_size;
-  result->parent = 0;
-  result->left = 0;
-  result->right = 0;
-  result->next = 0;
-  result->last = 0;
-  result->columnidx = columnidx;
-
-  strcpy(result->row, row);
-
-  if(must_compact)
-    result->value = (char*) value;
-  else
-  {
-    result->value = JPT_buffer_alloc(info, value_size);
-    memcpy(result->value, value, value_size);
-  }
-
-  return result;
-}
-
-void
-JPT_splay(struct JPT_info* info, struct JPT_node* n)
-{
-  assert(info->is_writing || info->reader_count);
-
-  while(n->parent)
-  {
-    struct JPT_node* parent = n->parent;
-    int isleft = (n == parent->left);
-
-    assert(isleft ^ (n == parent->right));
-
-    if(!parent->parent)
-    {
-      assert(parent == info->root);
-
-      if(isleft)
-      {
-        info->root = n;
-
-        parent->left = n->right;
-        if(parent->left)
-          parent->left->parent = parent;
-
-        n->right = parent;
-        parent->parent = n;
-
-        n->parent = 0;
-      }
-      else
-      {
-        info->root = n;
-
-        parent->right = n->left;
-        if(parent->right)
-          parent->right->parent = parent;
-
-        n->left = parent;
-        parent->parent = n;
-
-        n->parent = 0;
-      }
-
-      break;
-    }
-    else
-    {
-      struct JPT_node* gparent = parent->parent;
-      int parent_isleft = (parent == gparent->left);
-
-      if(gparent->parent)
-      {
-        if(gparent->parent->left == gparent)
-        {
-          gparent->parent->left = n;
-        }
-        else
-        {
-          assert(gparent->parent->right == gparent);
-
-          gparent->parent->right = n;
-        }
-
-        n->parent = gparent->parent;
-      }
-      else
-      {
-        info->root = n;
-
-        n->parent = 0;
-      }
-
-      if(isleft && parent_isleft)
-      {
-        gparent->left = parent->right;
-        if(gparent->left)
-          gparent->left->parent = gparent;
-
-        parent->left = n->right;
-        if(parent->left)
-          parent->left->parent = parent;
-
-        parent->right = gparent;
-        if(parent->right)
-          parent->right->parent = parent;
-
-        n->right = parent;
-        n->right->parent = n;
-      }
-      else if(!isleft && !parent_isleft)
-      {
-        gparent->right = parent->left;
-        if(gparent->right)
-          gparent->right->parent = gparent;
-
-        parent->right = n->left;
-        if(parent->right)
-          parent->right->parent = parent;
-
-        parent->left = gparent;
-        if(parent->left)
-          parent->left->parent = parent;
-
-        n->left = parent;
-        n->left->parent = n;
-      }
-      else if(!isleft && parent_isleft)
-      {
-        gparent->left = n->right;
-        if(gparent->left)
-          gparent->left->parent = gparent;
-
-        parent->right = n->left;
-        if(parent->right)
-          parent->right->parent = parent;
-
-        n->left = parent;
-        n->left->parent = n;
-
-        n->right = gparent;
-        n->right->parent = n;
-      }
-      else
-      {
-        assert(isleft && !parent_isleft);
-
-        gparent->right = n->left;
-        if(gparent->right)
-          gparent->right->parent = gparent;
-
-        parent->left = n->right;
-        if(parent->left)
-          parent->left->parent = parent;
-
-        n->right = parent;
-        n->right->parent = n;
-
-        n->left = gparent;
-        n->left->parent = n;
-      }
-    }
-  }
 }
 
 void
@@ -1643,15 +1439,9 @@ JPT_insert(struct JPT_info* info,
            uint64_t* timestamp, int flags)
 {
   int bloom_indices[4];
-  const char* cvalue = value;
-  struct JPT_node* n;
-  int cmp;
   uint32_t columnidx;
-  size_t space_needed;
   size_t row_size = strlen(row) + 1;
-  size_t column_size = strlen(column) + 1;
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
-  int must_compact = 0;
   int written = 0;
 
   assert(info->is_writing && !info->reader_count);
@@ -1683,14 +1473,14 @@ JPT_insert(struct JPT_info* info,
         {
           ssize_t result;
 
-          result = JPT_disktable_overwrite(d, row, columnidx, cvalue, value_size);
+          result = JPT_disktable_overwrite(d, row, columnidx, value, value_size);
 
           if(result == -1 && errno != ENOENT)
             return -1;
 
           if(result > 0)
           {
-            cvalue += result;
+            value = (char*) value + result;
             value_size -= result;
             written = 1;
           }
@@ -1722,267 +1512,10 @@ JPT_insert(struct JPT_info* info,
     }
   }
 
-  space_needed = ((row_size + 3) & ~3)
-               + ((column_size + 3) & ~3)
-               + ((sizeof(struct JPT_node) + 3) & ~3);
+  if(written && (flags & JPT_REPLACE) && !value_size)
+    return 0;
 
-  if(info->buffer_util + space_needed > info->buffer_size)
-  {
-    if(-1 == JPT_compact(info))
-      return -1;
-  }
-
-  assert(info->buffer_util + space_needed <= info->buffer_size);
-
-  space_needed += ((value_size + 3) & ~3);
-
-  if(info->buffer_util + space_needed > info->buffer_size)
-    must_compact = 1;
-
-  if(!info->root)
-  {
-    if((flags & JPT_REPLACE) && written && !value_size)
-      return 0;
-
-    info->root = JPT_create_node(info, row, columnidx, cvalue, value_size, must_compact);
-    info->root->timestamp = *timestamp;
-    ++info->node_count;
-    ++info->memtable_key_count;
-    info->memtable_key_size += strlen(row) + 1;
-    info->memtable_value_size += value_size;
-
-    goto done;
-  }
-
-  n = info->root;
-
-  for(;;)
-  {
-    if(columnidx != n->columnidx)
-      cmp = columnidx - n->columnidx;
-    else
-      cmp = strcmp(row, n->row);
-
-    if(!cmp)
-    {
-      if(n->value == (void*) -1)
-      {
-        if(must_compact)
-          n->value = (char*) cvalue;
-        else
-        {
-          n->value = JPT_buffer_alloc(info, value_size);
-          memcpy(n->value, cvalue, value_size);
-        }
-
-        n->timestamp = *timestamp;
-        n->value_size = value_size;
-        n->next = 0;
-        n->last = 0;
-
-        JPT_splay(info, n);
-
-        info->memtable_value_size += value_size;
-        info->memtable_key_size += strlen(row) + 1;
-        ++info->node_count;
-        ++info->memtable_key_count;
-
-        goto done;
-      }
-      else if(flags & JPT_APPEND)
-      {
-        struct JPT_node_data* d = JPT_buffer_alloc(info, sizeof(struct JPT_node_data));
-
-        if(!n->last)
-        {
-          n->next = d;
-          n->last = d;
-        }
-        else
-        {
-          assert(!n->last->next);
-          n->last->next = d;
-          n->last = d;
-        }
-
-        if(must_compact)
-          d->value = (char*) cvalue;
-        else
-        {
-          d->value = JPT_buffer_alloc(info, value_size);
-          memcpy(d->value, cvalue, value_size);
-        }
-
-        n->timestamp = *timestamp;
-        d->value_size = value_size;
-        d->next = 0;
-
-        JPT_splay(info, n);
-
-        info->memtable_value_size += value_size;
-
-        goto done;
-      }
-      else if(flags & JPT_REPLACE)
-      {
-        if(n->value_size >= value_size)
-        {
-          info->memtable_value_size -= n->value_size;
-          info->memtable_value_size += value_size;
-
-          memcpy(n->value, cvalue, value_size);
-          n->value_size = value_size;
-
-          struct JPT_node_data* d = n->next;
-
-          while(d)
-          {
-            info->memtable_value_size -= d->value_size;
-
-            d = d->next;
-          }
-
-          n->next = 0;
-          n->last = 0;
-        }
-        else
-        {
-          memcpy(n->value, cvalue, n->value_size);
-          cvalue += n->value_size;
-          value_size -= n->value_size;
-
-          struct JPT_node_data* d = n->next;
-          n->last = 0;
-
-          while(d && value_size)
-          {
-            if(d->value_size >= value_size)
-            {
-              info->memtable_value_size -= d->value_size;
-              info->memtable_value_size += value_size;
-              d->value_size = value_size;
-            }
-
-            memcpy(d->value, cvalue, d->value_size);
-
-            cvalue += d->value_size;
-            value_size -= d->value_size;
-
-            n->last = d;
-
-            d = d->next;
-          }
-
-          while(d)
-          {
-            info->memtable_value_size -= d->value_size;
-
-            d = d->next;
-          }
-
-          if(value_size)
-          {
-            d = JPT_buffer_alloc(info, sizeof(struct JPT_node_data));
-
-            if(must_compact)
-              d->value = (char*) cvalue;
-            else
-            {
-              d->value = JPT_buffer_alloc(info, value_size);
-              memcpy(d->value, cvalue, value_size);
-            }
-
-            d->value_size = value_size;
-            d->next = 0;
-
-            info->memtable_value_size += value_size;
-
-            if(n->next)
-            {
-              n->last->next = d;
-              n->last = d;
-            }
-            else
-            {
-              n->next = d;
-              n->last = d;
-            }
-          }
-          else if(n->last)
-            n->last->next = 0;
-        }
-
-        n->timestamp = *timestamp;
-
-        JPT_splay(info, n);
-
-        goto done;
-      }
-      else
-      {
-        JPT_splay(info, n);
-
-        errno = EEXIST;
-
-        return -1;
-      }
-    }
-
-    if(cmp < 0)
-    {
-      if(!n->left)
-      {
-        if((flags & JPT_REPLACE) && written && !value_size)
-          goto done;
-
-        n->left = JPT_create_node(info, row, columnidx, cvalue, value_size, must_compact);
-        n->left->timestamp = *timestamp;
-        n->left->parent = n;
-        ++info->node_count;
-        ++info->memtable_key_count;
-        info->memtable_key_size += strlen(row) + 1;
-        info->memtable_value_size += value_size;
-
-        JPT_splay(info, n->left);
-
-        goto done;
-      }
-      else
-        n = n->left;
-    }
-    else
-    {
-      if(!n->right)
-      {
-        if((flags & JPT_REPLACE) && written && !value_size)
-          goto done;
-
-        n->right = JPT_create_node(info, row, columnidx, cvalue, value_size, must_compact);
-        n->right->timestamp = *timestamp;
-        n->right->parent = n;
-        ++info->node_count;
-        ++info->memtable_key_count;
-        info->memtable_key_size += strlen(row) + 1;
-        info->memtable_value_size += value_size;
-
-        JPT_splay(info, n->right);
-
-        goto done;
-      }
-      else
-        n = n->right;
-    }
-  }
-
-done:
-
-  if(must_compact)
-  {
-    if(-1 == JPT_compact(info))
-      return -1;
-  }
-
-  return 0;
+  return JPT_memtable_insert(info, row, columnidx, value, value_size, timestamp, flags);
 }
 
 int
@@ -2022,7 +1555,7 @@ jpt_insert_timestamp(struct JPT_info* info,
       return -1;
 
     if(info->flags & JPT_SYNC)
-      fdatasync(fileno(info->logfile));
+      fdatasync(info->logfd);
   }
 
   return res;
@@ -2305,7 +1838,10 @@ JPT_log_replay(struct JPT_info* info)
 truncate:
 
   ftruncate(info->logfd, last_valid);
-  rewind(info->logfile);
+  fseek(info->logfile, last_valid, SEEK_SET);
+
+  if(!last_valid)
+    info->logfile_empty = 1;
 
   result = 0;
 
@@ -2336,14 +1872,19 @@ static int
 JPT_log_begin(struct JPT_info* info)
 {
   if(!info->logfile_empty)
+  {
+    assert(8 <= ftell(info->logfile));
     return 0;
+  }
+
+  assert(0 == ftell(info->logfile));
 
   if(-1 == JPT_write_uint64(info->logfile, info->file_size)
   || -1 == fflush(info->logfile))
     return -1;
 
   if(info->flags & JPT_SYNC)
-    fdatasync(fileno(info->logfile));
+    fdatasync(info->logfd);
   info->logfile_empty = 0;
 
   return 0;
@@ -2379,7 +1920,7 @@ jpt_remove(struct JPT_info* info, const char* row, const char* column)
       return -1;
 
     if(info->flags & JPT_SYNC)
-      fdatasync(fileno(info->logfile));
+      fdatasync(info->logfd);
   }
 
   return res;
@@ -2606,7 +2147,7 @@ jpt_remove_column(struct JPT_info* info, const char* column, int flags)
       return -1;
 
     if(info->flags & JPT_SYNC)
-      fdatasync(fileno(info->logfile));
+      fdatasync(info->logfd);
   }
 
   return result;
@@ -2638,7 +2179,7 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
       return -1;
 
     if(info->flags & JPT_SYNC)
-      fdatasync(fileno(info->logfile));
+      fdatasync(info->logfd);
   }
 
   return 0;
@@ -2771,8 +2312,6 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
   if(!max_read && *value)
     ((char*) *value)[*value_size] = 0;
 
-  TRACE((stderr, " = \"%.*s\" (%zu bytes)\n", (int) *value_size, (const char*) *value, *value_size));
-
   return res;
 }
 
@@ -2783,11 +2322,22 @@ jpt_get(struct JPT_info* info,
 {
   int res;
 
+  TRACE((stderr, "jpt_get(%p, \"%s\", \"%s\", %p, %p)", info, row, column, value, value_size));
+
   JPT_reader_enter(info);
 
   res = JPT_get(info, row, column, value, value_size, 0, 0, 0);
 
   JPT_reader_leave(info);
+
+  if(res >= 0)
+  {
+    TRACE((stderr, " = \"%.*s\" (%zu bytes)\n", (int) *value_size, (const char*) *value, *value_size));
+  }
+  else
+  {
+    TRACE((stderr, " = %d\n", res));
+  }
 
   return res;
 }

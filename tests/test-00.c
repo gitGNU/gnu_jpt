@@ -23,14 +23,38 @@ main(int argc, char** argv)
   size_t retsize;
 
   WANT_TRUE(0 == unlink("test-db.tab") || errno == ENOENT);
+  WANT_TRUE(0 == unlink("test-db.tab.log") || errno == ENOENT);
+
+  WANT_POINTER(db = jpt_init("test-db.tab", 1024 * 1024, 0))
+  WANT_SUCCESS(jpt_insert(db, "row1", "col1", "1234567890", 10, 0));
+  WANT_SUCCESS(jpt_compact(db));
+  WANT_SUCCESS(jpt_insert(db, "row1", "col1", "abcdefghijklmnopqrst", 20, JPT_REPLACE));
+  WANT_SUCCESS(jpt_get(db, "row1", "col1", &ret, &retsize));
+  WANT_TRUE(retsize == 20);
+  free(ret);
+  jpt_close(db);
+
+  WANT_TRUE(0 == unlink("test-db.tab") || errno == ENOENT);
+  WANT_TRUE(0 == unlink("test-db.tab.log") || errno == ENOENT);
+
+  WANT_POINTER(db = jpt_init("test-db.tab", 1024 * 1024, 0))
+  WANT_SUCCESS(jpt_insert(db, "MFXKDBSQMOXZBCBBLQHRCWD", "SGSNNIZFVUBQKPXKLCPHHOZRTIH", "ZQGKX", 5, JPT_APPEND));
+  WANT_SUCCESS(jpt_compact(db));
+  WANT_SUCCESS(jpt_insert(db, "MFXKDBSQMOXZBCBBLQHRCWD", "SGSNNIZFVUBQKPXKLCPHHOZRTIH", "UGJLBY", 6, JPT_REPLACE));
+  WANT_SUCCESS(jpt_compact(db));
+  WANT_SUCCESS(jpt_get(db, "MFXKDBSQMOXZBCBBLQHRCWD", "SGSNNIZFVUBQKPXKLCPHHOZRTIH", &ret, &retsize));
+  WANT_TRUE(retsize == 6);
+  free(ret);
+  jpt_close(db);
+
+  WANT_TRUE(0 == unlink("test-db.tab") || errno == ENOENT);
+  WANT_TRUE(0 == unlink("test-db.tab.log") || errno == ENOENT);
 
   WANT_POINTER(db = jpt_init("test-db.tab", 1024 * 1024, 0));
-
   WANT_SUCCESS(jpt_insert(db, "eple", "eple", "eple", 4, JPT_REPLACE));
   WANT_SUCCESS(jpt_insert(db, "eple", "eple", "hest", 4, JPT_APPEND));
   WANT_SUCCESS(jpt_insert(db, "eple", "eple", "hest", 4, JPT_REPLACE));
   WANT_SUCCESS(jpt_compact(db));
-
   WANT_FAILURE(jpt_get(db, "row1", "col1", &ret, &retsize));
   WANT_FAILURE(jpt_get(db, "!", "!", &ret, &retsize));
   WANT_SUCCESS(jpt_insert(db, "row1", "col1", "a", 1, JPT_APPEND));
@@ -77,6 +101,7 @@ main(int argc, char** argv)
   jpt_close(db);
 
   WANT_SUCCESS(unlink("test-db.tab"));
+  WANT_SUCCESS(unlink("test-db.tab.log"));
 
   fprintf(stderr, "* passed all %zu test%s\n", test_count, (test_count != 1) ? "s" : "");
 

@@ -151,10 +151,31 @@ cell_callback(const char* row, const char* column, const void* data, size_t data
       break;
 
   if(data_size > values[nrow][ncolumn].size)
-    fprintf(stderr, "%s,%s: %d bytes in database, wanted %d\n", row, column, (int) data_size, (int) values[nrow][ncolumn].size);
+  {
+    fprintf(stderr, "\"%s\", \"%s\": %d bytes in database, wanted %d\n", row, column, (int) data_size, (int) values[nrow][ncolumn].size);
+    abort();
+  }
 
-  WANT_TRUE(data_size <= values[nrow][ncolumn].size);
-  WANT_TRUE(0 == memcmp(values[nrow][ncolumn].data, data, data_size));
+  if(memcmp(values[nrow][ncolumn].data, data, data_size))
+  {
+    size_t i;
+
+    fprintf(stderr, "Data mismatch at \"%s\", \"%s\":\n", row, column);
+    fprintf(stderr, "Wanted: ");
+
+    for(i = 0; i < data_size; ++i)
+      fprintf(stderr, "%c", values[nrow][ncolumn].data[i]);
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Got:    ");
+
+    for(i = 0; i < data_size; ++i)
+      fprintf(stderr, "%c", ((char*) data)[i]);
+
+    fprintf(stderr, "\n");
+
+    abort();
+  }
 
   return 0;
 }
@@ -193,6 +214,11 @@ test_thread(void* arg)
         memcpy(v->data, tokens[token], tokenlen);
 
         WANT_SUCCESS(jpt_insert(db, tokens[row], tokens[col], tokens[token], tokenlen, JPT_REPLACE));
+
+        WANT_SUCCESS(jpt_get(db, tokens[row], tokens[col], &ret, &retsize));
+        WANT_TRUE(retsize == tokenlen);
+        WANT_TRUE(!memcmp(ret, tokens[token], tokenlen));
+        free(ret);
       }
 
       break;
@@ -305,7 +331,7 @@ test_thread(void* arg)
     }
     else if((rand_r(&seed) % 1000) == 0)
     {
-      WANT_SUCCESS(jpt_compact(db));
+      //WANT_SUCCESS(jpt_compact(db));
     }
     else if((rand_r(&seed) % 10000) == 0)
     {

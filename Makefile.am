@@ -33,3 +33,6 @@ libdjpt_la_LIBADD = libdjpt-common.la -ljpt
 
 libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
 libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0
+
+%.c: %.x
+	ctanglex $<

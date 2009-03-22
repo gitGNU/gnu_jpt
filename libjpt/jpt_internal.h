@@ -41,6 +41,9 @@
 #define JPT_OPERATOR_CREATE_COLUMN  0x0003
 #define JPT_OPERATOR_REMOVE_COLUMN  0x0004
 
+extern __thread int JPT_errno;
+extern __thread char* JPT_last_error;
+
 struct JPT_node_data
 {
   void* value;
@@ -161,10 +164,15 @@ struct JPT_key_info_callback_args
 };
 
 void
-JPT_splay(struct JPT_info* info, struct JPT_node* n);
+JPT_memtable_splay(struct JPT_info* info, struct JPT_node* n);
 
 int
 JPT_memtable_has_key(struct JPT_info* info, const char* row, uint32_t columnidx);
+
+int
+JPT_memtable_insert(struct JPT_info* info, const char* row, uint32_t columnidx,
+                    const void* value, size_t value_size, uint64_t* timestamp,
+                    int flags);
 
 int
 JPT_memtable_get(struct JPT_info* info, const char* row, uint32_t columnidx,
@@ -210,6 +218,9 @@ JPT_disktable_cursor_advance(struct JPT_info* info,
 int
 JPT_disktable_cursor_remap(struct JPT_info* info,
                            struct JPT_disktable_cursor* cursor);
+
+int
+JPT_compact(struct JPT_info* info);
 
 void
 JPT_generate_key(char* target, const char* row, uint32_t columnidx);
