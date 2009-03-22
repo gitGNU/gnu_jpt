@@ -31,7 +31,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-check_PROGRAMS = test-00$(EXEEXT) test-journal-00$(EXEEXT)
+check_PROGRAMS = test-00$(EXEEXT) test-01$(EXEEXT) \
+	test-journal-00$(EXEEXT)
 subdir = tests
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -43,6 +44,9 @@ CONFIG_CLEAN_FILES =
 test_00_SOURCES = test-00.c
 test_00_OBJECTS = test-00.$(OBJEXT)
 test_00_DEPENDENCIES = ../libjpt.la
+test_01_SOURCES = test-01.c
+test_01_OBJECTS = test-01.$(OBJEXT)
+test_01_DEPENDENCIES = ../libjpt.la
 test_journal_00_SOURCES = test-journal-00.c
 test_journal_00_OBJECTS = test-journal-00.$(OBJEXT)
 test_journal_00_DEPENDENCIES = ../libjpt.la
@@ -58,8 +62,8 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = test-00.c test-journal-00.c
-DIST_SOURCES = test-00.c test-journal-00.c
+SOURCES = test-00.c test-01.c test-journal-00.c
+DIST_SOURCES = test-00.c test-01.c test-journal-00.c
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -174,7 +178,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 TESTS = $(check_PROGRAMS)
 AM_CPPFLAGS = -I../libjpt/
-test_00_LDADD = ../libjpt.la 
+test_00_LDADD = ../libjpt.la
+test_01_LDADD = ../libjpt.la
 test_journal_00_LDADD = ../libjpt.la
 all: all-am
 
@@ -219,6 +224,9 @@ clean-checkPROGRAMS:
 test-00$(EXEEXT): $(test_00_OBJECTS) $(test_00_DEPENDENCIES) 
 	@rm -f test-00$(EXEEXT)
 	$(LINK) $(test_00_OBJECTS) $(test_00_LDADD) $(LIBS)
+test-01$(EXEEXT): $(test_01_OBJECTS) $(test_01_DEPENDENCIES) 
+	@rm -f test-01$(EXEEXT)
+	$(LINK) $(test_01_OBJECTS) $(test_01_LDADD) $(LIBS)
 test-journal-00$(EXEEXT): $(test_journal_00_OBJECTS) $(test_journal_00_DEPENDENCIES) 
 	@rm -f test-journal-00$(EXEEXT)
 	$(LINK) $(test_journal_00_OBJECTS) $(test_journal_00_LDADD) $(LIBS)
@@ -230,6 +238,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-00.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-01.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-journal-00.Po@am__quote@
 
 .c.o:
