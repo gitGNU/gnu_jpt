@@ -18,6 +18,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <pthread.h>
 #include <string.h>
 
 #include "jpt_internal.h"
@@ -129,7 +130,6 @@ given column index.
     ++(*nodes);
   }
 
-
 @ Our primary sorting key is column index, while the secondary is the row name.
 Values of |cmp| less than 0 denotes a left branch, values greather than 0
 denotes a right branch.  If |cmp| is zero, the current node matches the search
@@ -168,6 +168,8 @@ search key.
   {
     struct JPT_node* n = info->root;
     int cmp;
+
+    assert(info->is_writing || 0 != pthread_mutex_trylock(&info->memtable_mutex));
 
     while(n)
     {
@@ -216,6 +218,8 @@ appends the associated value to the pointers passed as parameters.
   {
     struct JPT_node* n = info->root;
     int cmp;
+
+    assert(info->is_writing || 0 != pthread_mutex_trylock(&info->memtable_mutex));
 
     while(n)
     {
@@ -358,7 +362,9 @@ balanced.
   void
   JPT_memtable_splay(struct JPT_info* info, struct JPT_node* n)
   {
-    assert(info->is_writing || info->reader_count);
+    assert(info->is_writing
+           || (info->reader_count
+               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
 
     while(n->parent)
     {
@@ -523,7 +529,9 @@ allocations are word aligned.
   {
     void* result;
 
-    assert(info->is_writing || info->reader_count);
+    assert(info->is_writing
+           || (info->reader_count
+               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
 
     if(!info->buffer)
     {
@@ -566,7 +574,9 @@ than our buffer size.
   {
     struct JPT_node* result;
 
-    assert(info->is_writing || info->reader_count);
+    assert(info->is_writing
+           || (info->reader_count
+               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
 
     result = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node));
     result->row = JPT_memtable_buffer_alloc(info, strlen(row) + 1);
@@ -612,6 +622,8 @@ JPT_memtable_insert(struct JPT_info* info, const char* row, uint32_t columnidx,
   size_t row_size = strlen(row) + 1;
   int must_compact = 0;
   int cmp;
+
+  assert(info->is_writing);
 
   @< Calculate needed space, compact or schedule compact if necessary @>
   @< Handle insertion into an empty tree (creating the root node) @>
@@ -700,6 +712,9 @@ done:
   {
     if(-1 == JPT_compact(info))
       return -1;
+
+    /* We return 1 to inform the caller that logging is not required */
+    return 1;
   }
 
   return 0;
@@ -712,6 +727,13 @@ done:
 
   if(info->buffer_util + space_needed > info->buffer_size)
   {
+    if(!(flags & (JPT_REPLACE | JPT_APPEND)) && 0 == JPT_memtable_has_key(info, row, columnidx))
+    {
+      errno = EEXIST;
+
+      return -1;
+    }
+
     if(-1 == JPT_compact(info))
       return -1;
   }
@@ -817,12 +839,7 @@ then create a new data node for the remaining part of the new value.
     d = d->next;
   }
 
-  while(d)
-  {
-    info->memtable_value_size -= d->value_size;
-
-    d = d->next;
-  }
+  @< Clear remaining data nodes starting at |d| @>
 
   if(!n->last)
     n->data.next = 0;
@@ -875,3 +892,74 @@ then create a new data node for the remaining part of the new value.
 
   value = (char*) value + d->value_size;
   value_size -= d->value_size;
+
+@ The |JPT_memtable_remove| function finds the node belonging to the given key,
+and places a tombstone in its place.  A tombstone is a node with |value| equal
+to |(void*) -1|.
+
+@< Functions @>=
+
+int
+JPT_memtable_remove(struct JPT_info* info, const char* row, uint32_t columnidx)
+{
+  struct JPT_node* n;
+
+  assert(info->is_writing);
+
+  n = info->root;
+
+  while(n)
+  {
+    int cmp;
+
+    @< Determine branch of search key @>
+
+    @< Left branch: @>
+    {
+      n = n->left;
+
+      continue;
+    }
+
+    @< Right branch: @>
+    {
+      n = n->right;
+
+      continue;
+    }
+
+    if(n->data.value != (void*) -1)
+    {
+      struct JPT_node_data* d = &n->data;
+
+      @< Clear remaining data nodes starting at |d| @>
+
+      info->memtable_key_size -= strlen(row) + 1;
+      --info->memtable_key_count;
+      --info->node_count;
+
+      n->data.value = (void*) -1;
+      n->data.next = 0;
+
+      return 0;
+    }
+
+    return -1;
+  }
+
+  return -1;
+}
+
+@ We keep track of the total data size at all times in order to make the
+process of creating disk tables more efficient.  This snippet handles the
+updating of the total value size when a value is replaced with a shorter value,
+or being removed.
+
+@< Clear remaining data nodes starting at |d| @>=
+
+  while(d)
+  {
+    info->memtable_value_size -= d->value_size;
+
+    d = d->next;
+  }

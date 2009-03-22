@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/uio.h>
 
 #include "jpt.h"
 
@@ -86,9 +87,11 @@ struct JPT_info
 
   char* filename;
   int fd;
+
   int logfd;
-  FILE* logfile;
   int logfile_empty;
+  unsigned char logbuf[256]; /* For log entry headers */
+  size_t logbuf_fill;
 
   char* map;
   off_t map_size;
@@ -187,6 +190,9 @@ void
 JPT_memtable_list_column(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx);
 
 int
+JPT_memtable_remove(struct JPT_info* info, const char* row, uint32_t columnidx);
+
+int
 JPT_disktable_read_keyinfo(struct JPT_disktable* disktable, struct JPT_key_info* target, size_t keyidx);
 
 int
@@ -257,5 +263,11 @@ JPT_read_uint(FILE* f);
 
 uint64_t
 JPT_read_uint64(FILE* f);
+
+off_t
+JPT_lseek(int fd, off_t offset, int whence, off_t filesize);
+
+ssize_t
+JPT_writev(int fd, const struct iovec *iov, int iovcnt);
 
 #endif /* !JPT_INTERNAL_H_ */

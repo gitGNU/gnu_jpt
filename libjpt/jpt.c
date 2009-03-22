@@ -40,11 +40,13 @@
 #define JPT_SIGNATURE     "LBAT"
 #define JPT_VERSION       8
 
-#define TRACE(x) fprintf x ; fflush(stderr);
+/* #define TRACE(x) fprintf x ; fflush(stderr); */
 
 #ifndef TRACE
 #define TRACE(x)
 #endif
+
+#define IOV_SET(iov, n, base, len) do { iov[n].iov_base = (void*) base; iov[n].iov_len = len; } while(0)
 
 static int
 JPT_log_reset(struct JPT_info* info);
@@ -195,77 +197,48 @@ JPT_set_error(char* error, int err)
   errno = err;
 }
 
-ssize_t
-JPT_read_all(int fd, void* target, size_t size)
+static void
+JPT_log_append_uint(struct JPT_info* info, unsigned int value)
 {
-  size_t remaining = size;
-  char* o = target;
+  unsigned char* output = &info->logbuf[info->logbuf_fill];
 
-  while(remaining)
-  {
-    ssize_t res = read(fd, o, remaining);
+  assert(info->is_writing);
+  assert(info->logbuf_fill <= sizeof(info->logbuf) - 5);
 
-    if(res < 0)
-      return -1;
+  if(value > 0xfffffff)
+    *output++ = 0x80 | ((value >> 28) & 0x7f);
 
-    if(!res)
-    {
-      asprintf(&JPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
+  if(value > 0x1fffff)
+    *output++ = 0x80 | ((value >> 21) & 0x7f);
 
-      return -1;
-    }
+  if(value > 0x3fff)
+    *output++ = 0x80 | ((value >> 14) & 0x7f);
 
-    o += res;
-    remaining -= res;
-  }
+  if(value > 0x7f)
+    *output++ = 0x80 | ((value >> 7) & 0x7f);
 
-  return size;
+  *output++ = value & 0x7f;
+
+  info->logbuf_fill = output - info->logbuf;
 }
 
-ssize_t
-JPT_write_all(int fd, const void* target, size_t size)
+static void
+JPT_log_append_uint64(struct JPT_info* info, uint64_t value)
 {
-  size_t remaining = size;
-  const char* o = target;
+  unsigned char* output = &info->logbuf[info->logbuf_fill];
 
-  while(remaining)
-  {
-    ssize_t res = write(fd, o, remaining);
+  assert(info->logbuf_fill <= sizeof(info->logbuf) - 8);
 
-    if(res < 0)
-    {
-      asprintf(&JPT_last_error, "Write failed: %s", strerror(errno));
+  *output++ = value >> 56;
+  *output++ = value >> 48;
+  *output++ = value >> 40;
+  *output++ = value >> 32;
+  *output++ = value >> 24;
+  *output++ = value >> 16;
+  *output++ = value >> 8;
+  *output++ = value;
 
-      return -1;
-    }
-
-    if(!res)
-    {
-      asprintf(&JPT_last_error, "Tried to write %zu bytes, terminated after %zu", size, size - remaining);
-
-      return -1;
-    }
-
-    o += res;
-    remaining -= res;
-  }
-
-  return size;
-}
-
-off_t
-JPT_lseek(int fd, off_t offset, int whence, off_t filesize)
-{
-  off_t new_pos = lseek64(fd, offset, whence);
-
-  if(new_pos > filesize)
-  {
-    errno = ERANGE;
-
-    return -1;
-  }
-
-  return new_pos;
+  info->logbuf_fill += 8;
 }
 
 static void
@@ -633,10 +606,11 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
     goto fail;
 
   info->logfd = open(logname, O_RDWR | O_CREAT, 0600);
-  info->logfile = fdopen(info->logfd, "r+");
 
-  if(!info->logfile)
+  if(info->logfd == -1)
     goto fail;
+
+  info->logbuf_fill = 0;
 
   free(logname);
 
@@ -817,8 +791,8 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
 fail:
 
-  if(info->logfile)
-    fclose(info->logfile);
+  if(info->logfd != -1)
+    close(info->logfd);
 
   if(info->fd != -1)
     close(info->fd);
@@ -1039,7 +1013,8 @@ JPT_compact(struct JPT_info* info)
   if(-1 == JPT_write_all(info->fd, JPT_SIGNATURE, 4))
     longjmp(io_error, 1);
 
-  fdatasync(info->fd);
+  if(-1 == fdatasync(info->fd))
+    longjmp(io_error, 1);
 
   if(-1 == JPT_log_reset(info))
     longjmp(io_error, 1);
@@ -1513,7 +1488,11 @@ JPT_insert(struct JPT_info* info,
   }
 
   if(written && (flags & JPT_REPLACE) && !value_size)
+  {
+    JPT_memtable_remove(info, row, columnidx);
+
     return 0;
+  }
 
   return JPT_memtable_insert(info, row, columnidx, value, value_size, timestamp, flags);
 }
@@ -1526,7 +1505,7 @@ jpt_insert_timestamp(struct JPT_info* info,
 {
   int res;
 
-  TRACE((stderr, "jpt_insert_timestamp(%p, \"%s\", \"%s\", \"%.*s\", %zu, 0x%04x)\n", info, row, column, (int) value_size, (const char*) value, value_size, flags));
+  TRACE((stderr, "jpt_insert_timestamp(%p, \"%s\", \"%s\", \"%.*s\", %zu, 0x%04x)", info, row, column, (int) value_size, (const char*) value, value_size, flags));
 
   JPT_clear_error();
 
@@ -1534,29 +1513,48 @@ jpt_insert_timestamp(struct JPT_info* info,
 
   res = JPT_insert(info, row, column, value, value_size, timestamp, flags);
 
-  JPT_writer_leave(info);
+  TRACE((stderr, " = %d\n", res));
 
-  if(res != -1)
+  /* if res == -1, we had an error.  if res == 1, data is already commited */
+  if(res == 0)
   {
+    struct iovec iov[4];
     int rowlen = strlen(row);
     int collen = strlen(column);
 
-    if(-1 == JPT_log_begin(info)
-    || -1 == JPT_write_uint(info->logfile, JPT_OPERATOR_INSERT)
-    || -1 == JPT_write_uint(info->logfile, flags)
-    || -1 == JPT_write_uint(info->logfile, rowlen)
-    || -1 == JPT_write_uint(info->logfile, collen)
-    || -1 == JPT_write_uint(info->logfile, value_size)
-    || -1 == JPT_write_uint64(info->logfile, *timestamp)
-    || rowlen != fwrite(row, 1, rowlen, info->logfile)
-    || collen != fwrite(column, 1, collen, info->logfile)
-    || value_size != fwrite(value, 1, value_size, info->logfile)
-    || -1 == fflush(info->logfile))
+    if(-1 == JPT_log_begin(info))
+    {
+      JPT_writer_leave(info);
+
       return -1;
+    }
+
+    JPT_log_append_uint(info, JPT_OPERATOR_INSERT);
+    JPT_log_append_uint(info, flags);
+    JPT_log_append_uint(info, rowlen);
+    JPT_log_append_uint(info, collen);
+    JPT_log_append_uint(info, value_size);
+    JPT_log_append_uint64(info, *timestamp);
+
+    IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+    IOV_SET(iov, 1, row, rowlen);
+    IOV_SET(iov, 2, column, collen);
+    IOV_SET(iov, 3, value, value_size);
+
+    info->logbuf_fill = 0;
+
+    if(-1 == JPT_writev(info->logfd, iov, 4))
+    {
+      JPT_writer_leave(info);
+
+      return -1;
+    }
 
     if(info->flags & JPT_SYNC)
       fdatasync(info->logfd);
   }
+
+  JPT_writer_leave(info);
 
   return res;
 }
@@ -1575,11 +1573,9 @@ static int
 JPT_remove(struct JPT_info* info, const char* row, const char* column)
 {
   int bloom_indices[4];
-  struct JPT_node* n;
   struct JPT_disktable* disktable = info->first_disktable;
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
   uint32_t columnidx;
-  int cmp;
   int found = 0;
 
   assert(info->is_writing && !info->reader_count);
@@ -1607,47 +1603,8 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
     disktable = disktable->next;
   }
 
-  n = info->root;
-
-  while(n)
-  {
-    if(columnidx != n->columnidx)
-      cmp = columnidx - n->columnidx;
-    else
-      cmp = strcmp(row, n->row);
-
-    if(!cmp)
-    {
-      if(n->data.value != (void*) -1)
-      {
-        struct JPT_node_data* d = n->data.next;
-
-        while(d)
-        {
-          info->memtable_value_size -= d->value_size;
-
-          d = d->next;
-        }
-
-        info->memtable_value_size -= n->data.value_size;
-        info->memtable_key_size -= strlen(row) + 1;
-        --info->memtable_key_count;
-        --info->node_count;
-
-        n->data.value = (void*) -1;
-        n->data.next = 0;
-
-        found = 1;
-      }
-
-      break;
-    }
-
-    if(cmp < 0)
-      n = n->left;
-    else
-      n = n->right;
-  }
+  if(0 == JPT_memtable_remove(info, row, columnidx))
+    found = 1;
 
   if(!found)
   {
@@ -1669,13 +1626,14 @@ JPT_log_replay(struct JPT_info* info)
   char* value = 0;
   int result = -1;
   off_t last_valid = 0;
+  FILE* input;
 
-  if(-1 == fseek(info->logfile, 0, SEEK_END))
+  size = lseek(info->logfd, 0, SEEK_END);
+
+  if(size == -1)
     return -1;
 
-  size = ftell(info->logfile);
-
-  if(-1 == fseek(info->logfile, 0, SEEK_SET))
+  if(-1 == lseek(info->logfd, 0, SEEK_SET))
     return -1;
 
   if(size == 0)
@@ -1688,7 +1646,18 @@ JPT_log_replay(struct JPT_info* info)
   if(size < sizeof(uint64_t))
     goto truncate;
 
-  old_size = JPT_read_uint64(info->logfile);
+  read(info->logfd, &old_size, sizeof(old_size));
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+  old_size = ((old_size & 0xff00000000000000ULL) >> 56)
+           | ((old_size & 0x00ff000000000000ULL) >> 40)
+           | ((old_size & 0x0000ff0000000000ULL) >> 24)
+           | ((old_size & 0x000000ff00000000ULL) >> 8)
+           | ((old_size & 0x00000000ff000000ULL) << 8)
+           | ((old_size & 0x0000000000ff0000ULL) << 24)
+           | ((old_size & 0x000000000000ff00ULL) << 40)
+           | ((old_size & 0x00000000000000ffULL) << 56);
+#endif
 
   if(info->file_size < old_size)
   {
@@ -1709,13 +1678,15 @@ JPT_log_replay(struct JPT_info* info)
     return -1;
   }
 
-  while(!feof(info->logfile))
+  input = fdopen(dup(info->logfd), "r+");
+
+  while(!feof(input))
   {
     int command;
 
-    command = JPT_read_uint(info->logfile);
+    command = JPT_read_uint(input);
 
-    if(feof(info->logfile))
+    if(feof(input))
       break;
 
     if(command == JPT_OPERATOR_INSERT)
@@ -1723,11 +1694,11 @@ JPT_log_replay(struct JPT_info* info)
       int flags, rowlen, collen, value_size;
       uint64_t timestamp;
 
-      flags = JPT_read_uint(info->logfile);
-      rowlen = JPT_read_uint(info->logfile);
-      collen = JPT_read_uint(info->logfile);
-      value_size = JPT_read_uint(info->logfile);
-      timestamp = JPT_read_uint64(info->logfile);
+      flags = JPT_read_uint(input);
+      rowlen = JPT_read_uint(input);
+      collen = JPT_read_uint(input);
+      value_size = JPT_read_uint(input);
+      timestamp = JPT_read_uint64(input);
       row = malloc(rowlen + 1);
       col = malloc(collen + 1);
       value = malloc(value_size);
@@ -1739,9 +1710,9 @@ JPT_log_replay(struct JPT_info* info)
         goto fail;
       }
 
-      if(rowlen != fread(row, 1, rowlen, info->logfile)
-      || collen != fread(col, 1, collen, info->logfile)
-      || value_size != fread(value, 1, value_size, info->logfile))
+      if(rowlen != fread(row, 1, rowlen, input)
+      || collen != fread(col, 1, collen, input)
+      || value_size != fread(value, 1, value_size, input))
         break;
 
       row[rowlen] = 0;
@@ -1762,16 +1733,16 @@ JPT_log_replay(struct JPT_info* info)
     {
       int rowlen, collen;
 
-      rowlen = JPT_read_uint(info->logfile);
-      collen = JPT_read_uint(info->logfile);
+      rowlen = JPT_read_uint(input);
+      collen = JPT_read_uint(input);
       row = malloc(rowlen + 1);
       col = malloc(collen + 1);
 
       if(!row || !col)
         goto fail;
 
-      if(rowlen != fread(row, 1, rowlen, info->logfile)
-      || collen != fread(col, 1, collen, info->logfile))
+      if(rowlen != fread(row, 1, rowlen, input)
+      || collen != fread(col, 1, collen, input))
         break;
 
       row[rowlen] = 0;
@@ -1787,14 +1758,14 @@ JPT_log_replay(struct JPT_info* info)
     {
       int flags, collen;
 
-      flags = JPT_read_uint(info->logfile);
-      collen = JPT_read_uint(info->logfile);
+      flags = JPT_read_uint(input);
+      collen = JPT_read_uint(input);
       col = malloc(collen + 1);
 
       if(!col)
         goto fail;
 
-      if(collen != fread(col, 1, collen, info->logfile))
+      if(collen != fread(col, 1, collen, input))
         break;
 
       col[collen] = 0;
@@ -1808,14 +1779,14 @@ JPT_log_replay(struct JPT_info* info)
     {
       int flags, collen;
 
-      flags = JPT_read_uint(info->logfile);
-      collen = JPT_read_uint(info->logfile);
+      flags = JPT_read_uint(input);
+      collen = JPT_read_uint(input);
       col = malloc(collen + 1);
 
       if(!col)
         goto fail;
 
-      if(collen != fread(col, 1, collen, info->logfile))
+      if(collen != fread(col, 1, collen, input))
         break;
 
       col[collen] = 0;
@@ -1827,18 +1798,24 @@ JPT_log_replay(struct JPT_info* info)
     }
     else
     {
-      asprintf(&JPT_last_error, "unexpected command %d in log file", command);
+      asprintf(&JPT_last_error, "Unexpected command %d in log file near offset %zu", command, ftell(input));
 
       goto fail;
     }
 
-    last_valid = ftell(info->logfile);
+    last_valid = ftell(input);
   }
 
 truncate:
 
-  ftruncate(info->logfd, last_valid);
-  fseek(info->logfile, last_valid, SEEK_SET);
+  fclose(input);
+  input = 0;
+
+  if(-1 == lseek(info->logfd, last_valid, SEEK_SET))
+    goto fail;
+
+  if(-1 == ftruncate(info->logfd, last_valid))
+    goto fail;
 
   if(!last_valid)
     info->logfile_empty = 1;
@@ -1846,6 +1823,9 @@ truncate:
   result = 0;
 
 fail:
+
+  if(input)
+    fclose(input);
 
   free(row);
   free(col);
@@ -1857,12 +1837,15 @@ fail:
 static int
 JPT_log_reset(struct JPT_info* info)
 {
+  if(-1 == lseek(info->logfd, 0, SEEK_SET))
+    return -1;
+
   if(-1 == ftruncate(info->logfd, 0))
     return -1;
 
-  rewind(info->logfile);
+  if(-1 == fdatasync(info->logfd))
+    return -1;
 
-  fdatasync(info->logfd);
   info->logfile_empty = 1;
 
   return 0;
@@ -1871,20 +1854,32 @@ JPT_log_reset(struct JPT_info* info)
 static int
 JPT_log_begin(struct JPT_info* info)
 {
+  struct iovec iov[1];
+
+  assert(!info->logbuf_fill);
+  assert(info->is_writing);
+
   if(!info->logfile_empty)
   {
-    assert(8 <= ftell(info->logfile));
+    assert(8 <= lseek(info->logfd, 0, SEEK_CUR));
+
     return 0;
   }
 
-  assert(0 == ftell(info->logfile));
+  assert(0 == lseek(info->logfd, 0, SEEK_CUR));
 
-  if(-1 == JPT_write_uint64(info->logfile, info->file_size)
-  || -1 == fflush(info->logfile))
+  JPT_log_append_uint64(info, info->file_size);
+
+  IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+
+  info->logbuf_fill = 0;
+
+  if(-1 == JPT_writev(info->logfd, iov, 1))
     return -1;
 
   if(info->flags & JPT_SYNC)
     fdatasync(info->logfd);
+
   info->logfile_empty = 0;
 
   return 0;
@@ -1903,25 +1898,41 @@ jpt_remove(struct JPT_info* info, const char* row, const char* column)
 
   res = JPT_remove(info, row, column);
 
-  JPT_writer_leave(info);
-
   if(res != -1)
   {
+    struct iovec iov[3];
     int rowlen = strlen(row);
     int collen = strlen(column);
 
-    if(-1 == JPT_log_begin(info)
-    || -1 == JPT_write_uint(info->logfile, JPT_OPERATOR_REMOVE)
-    || -1 == JPT_write_uint(info->logfile, rowlen)
-    || -1 == JPT_write_uint(info->logfile, collen)
-    || rowlen != fwrite(row, 1, rowlen, info->logfile)
-    || collen != fwrite(column, 1, collen, info->logfile)
-    || -1 == fflush(info->logfile))
+    if(-1 == JPT_log_begin(info))
+    {
+      JPT_writer_enter(info);
+
       return -1;
+    }
+
+    JPT_log_append_uint(info, JPT_OPERATOR_REMOVE);
+    JPT_log_append_uint(info, rowlen);
+    JPT_log_append_uint(info, collen);
+
+    IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+    IOV_SET(iov, 1, row, rowlen);
+    IOV_SET(iov, 2, column, collen);
+
+    info->logbuf_fill = 0;
+
+    if(-1 == JPT_writev(info->logfd, iov, 3))
+    {
+      JPT_writer_enter(info);
+
+      return -1;
+    }
 
     if(info->flags & JPT_SYNC)
       fdatasync(info->logfd);
   }
+
+  JPT_writer_leave(info);
 
   return res;
 }
@@ -2132,23 +2143,39 @@ jpt_remove_column(struct JPT_info* info, const char* column, int flags)
 
   result = JPT_remove_column(info, column, flags);
 
-  JPT_writer_leave(info);
-
   if(result != -1)
   {
+    struct iovec iov[2];
     int collen = strlen(column);
 
-    if(-1 == JPT_log_begin(info)
-    || -1 == JPT_write_uint(info->logfile, JPT_OPERATOR_REMOVE_COLUMN)
-    || -1 == JPT_write_uint(info->logfile, flags)
-    || -1 == JPT_write_uint(info->logfile, collen)
-    || collen != fwrite(column, 1, collen, info->logfile)
-    || -1 == fflush(info->logfile))
+    if(-1 == JPT_log_begin(info))
+    {
+      JPT_writer_enter(info);
+
       return -1;
+    }
+
+    JPT_log_append_uint(info, JPT_OPERATOR_REMOVE_COLUMN);
+    JPT_log_append_uint(info, flags);
+    JPT_log_append_uint(info, collen);
+
+    IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+    IOV_SET(iov, 1, column, collen);
+
+    info->logbuf_fill = 0;
+
+    if(-1 == JPT_writev(info->logfd, iov, 2))
+    {
+      JPT_writer_enter(info);
+
+      return -1;
+    }
 
     if(info->flags & JPT_SYNC)
       fdatasync(info->logfd);
   }
+
+  JPT_writer_leave(info);
 
   return result;
 }
@@ -2166,21 +2193,38 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
   }
   else
   {
-    JPT_writer_leave(info);
+    struct iovec iov[2];
 
     int collen = strlen(column);
 
-    if(-1 == JPT_log_begin(info)
-    || -1 == JPT_write_uint(info->logfile, JPT_OPERATOR_CREATE_COLUMN)
-    || -1 == JPT_write_uint(info->logfile, flags)
-    || -1 == JPT_write_uint(info->logfile, collen)
-    || collen != fwrite(column, 1, collen, info->logfile)
-    || -1 == fflush(info->logfile))
+    if(-1 == JPT_log_begin(info))
+    {
+      JPT_writer_enter(info);
+
       return -1;
+    }
+
+    JPT_log_append_uint(info, JPT_OPERATOR_CREATE_COLUMN);
+    JPT_log_append_uint(info, flags);
+    JPT_log_append_uint(info, collen);
+
+    IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+    IOV_SET(iov, 1, column, collen);
+
+    info->logbuf_fill = 0;
+
+    if(-1 == JPT_writev(info->logfd, iov, 2))
+    {
+      JPT_writer_enter(info);
+
+      return -1;
+    }
 
     if(info->flags & JPT_SYNC)
       fdatasync(info->logfd);
   }
+
+  JPT_writer_leave(info);
 
   return 0;
 }
@@ -2227,7 +2271,11 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
     dt = dt->next;
   }
 
+  pthread_mutex_lock(&info->memtable_mutex);
+
   result = JPT_memtable_has_key(info, row, columnidx);
+
+  pthread_mutex_unlock(&info->memtable_mutex);
 
   JPT_reader_leave(info);
 
@@ -3075,7 +3123,7 @@ jpt_close(struct JPT_info* info)
   JPT_free_disktables(info);
 
   close(info->fd);
-  fclose(info->logfile);
+  close(info->logfd);
 
   if(info->map_size)
     munmap(info->map, info->map_size);

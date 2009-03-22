@@ -15,7 +15,10 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <errno.h>
+#include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "jpt_internal.h"
 
@@ -97,4 +100,108 @@ JPT_read_uint64(FILE* f)
   }
 
   return result;
+}
+
+ssize_t
+JPT_read_all(int fd, void* target, size_t size)
+{
+  size_t remaining = size;
+  char* o = target;
+
+  while(remaining)
+  {
+    ssize_t res = read(fd, o, remaining);
+
+    if(res < 0)
+      return -1;
+
+    if(!res)
+    {
+      asprintf(&JPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
+
+      return -1;
+    }
+
+    o += res;
+    remaining -= res;
+  }
+
+  return size;
+}
+
+ssize_t
+JPT_write_all(int fd, const void* target, size_t size)
+{
+  size_t remaining = size;
+  const char* o = target;
+
+  while(remaining)
+  {
+    ssize_t res;
+
+    res = write(fd, o, remaining);
+
+    if(res < 0)
+    {
+      asprintf(&JPT_last_error, "Write failed: %s", strerror(errno));
+
+      return -1;
+    }
+
+    if(!res)
+    {
+      asprintf(&JPT_last_error, "Tried to write %zu bytes, terminated after %zu", size, size - remaining);
+
+      return -1;
+    }
+
+    o += res;
+    remaining -= res;
+  }
+
+  return size;
+}
+
+off_t
+JPT_lseek(int fd, off_t offset, int whence, off_t filesize)
+{
+  off_t new_pos = lseek64(fd, offset, whence);
+
+  if(new_pos > filesize)
+  {
+    errno = ERANGE;
+
+    return -1;
+  }
+
+  return new_pos;
+}
+
+ssize_t
+JPT_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+  size_t size = 0;
+  ssize_t ret;
+  int i;
+
+  for(i = 0; i < iovcnt; ++i)
+    size += iov[i].iov_len;
+
+  ret = writev(fd, iov, iovcnt);
+
+  if(ret == -1)
+  {
+    asprintf(&JPT_last_error, "Vector write failed: %s", strerror(errno));
+
+    return -1;
+  }
+
+  if(ret < size)
+  {
+    asprintf(&JPT_last_error, "Tried to write %zu bytes, but writev returned after %zu", size, ret);
+
+    return -1;
+  }
+
+  return 0;
 }
