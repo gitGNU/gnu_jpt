@@ -602,12 +602,12 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   if(-1 == asprintf(&logname, "%s.log", filename))
     goto fail;
 
-  if(-1 == lockf(info->logfd, F_TLOCK, INT_MAX))
-    goto fail;
-
   info->logfd = open(logname, O_RDWR | O_CREAT, 0600);
 
   if(info->logfd == -1)
+    goto fail;
+
+  if(-1 == lockf(info->logfd, F_TLOCK, INT_MAX))
     goto fail;
 
   info->logbuf_fill = 0;
@@ -1798,7 +1798,7 @@ JPT_log_replay(struct JPT_info* info)
     }
     else
     {
-      asprintf(&JPT_last_error, "Unexpected command %d in log file near offset %zu", command, ftell(input));
+      asprintf(&JPT_last_error, "Unexpected command %d in log file near offset %zu", command, (size_t) ftell(input));
 
       goto fail;
     }
@@ -2680,6 +2680,7 @@ jpt_column_scan(struct JPT_info* info, const char* column,
 
   if(columnidx == (uint32_t) -1)
   {
+    asprintf(&JPT_last_error, "The column `%s' does not exist", column);
     errno = ENOENT;
 
     JPT_reader_leave(info);
