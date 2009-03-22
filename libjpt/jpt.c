@@ -899,7 +899,7 @@ JPT_compact(struct JPT_info* info)
     }
 
     sum_key_size += strlen(nodes[i]->row) + 1;
-    sum_value_size += nodes[i]->value_size;
+    sum_value_size += nodes[i]->data.value_size;
     ++sum_key_count;
 
     JPT_generate_key(key_buf, nodes[i]->row, nodes[i]->columnidx);
@@ -912,10 +912,10 @@ JPT_compact(struct JPT_info* info)
 
     key_infos[row_count].timestamp = nodes[i]->timestamp;
     key_infos[row_count].offset = offset;
-    key_infos[row_count].size = strlen(key_buf) + 1 + nodes[i]->value_size;
+    key_infos[row_count].size = strlen(key_buf) + 1 + nodes[i]->data.value_size;
     key_infos[row_count].flags = 0;
 
-    struct JPT_node_data* d = nodes[i]->next;
+    struct JPT_node_data* d = nodes[i]->data.next;
 
     while(d)
     {
@@ -994,7 +994,7 @@ JPT_compact(struct JPT_info* info)
 
   for(i = 0; i < info->node_count; ++i)
   {
-    struct JPT_node_data* d = nodes[i]->next;
+    struct JPT_node_data* d = nodes[i]->data.next;
     size_t keylen;
 
     JPT_generate_key(key_buf, nodes[i]->row, nodes[i]->columnidx);
@@ -1005,8 +1005,8 @@ JPT_compact(struct JPT_info* info)
     {
       memcpy(info->map + offset, key_buf, keylen);
       offset += keylen;
-      memcpy(info->map + offset, nodes[i]->value, nodes[i]->value_size);
-      offset += nodes[i]->value_size;
+      memcpy(info->map + offset, nodes[i]->data.value, nodes[i]->data.value_size);
+      offset += nodes[i]->data.value_size;
 
       while(d)
       {
@@ -1020,7 +1020,7 @@ JPT_compact(struct JPT_info* info)
       if(-1 == JPT_write_all(info->fd, key_buf, keylen))
         longjmp(io_error, 1);
 
-      if(-1 == JPT_write_all(info->fd, nodes[i]->value, nodes[i]->value_size))
+      if(-1 == JPT_write_all(info->fd, nodes[i]->data.value, nodes[i]->data.value_size))
         longjmp(io_error, 1);
 
       while(d)
@@ -1135,7 +1135,7 @@ int
 jpt_major_compact(struct JPT_info* info)
 {
   char* newname;
-  struct JPT_disktable* n;
+  struct JPT_disktable* dt;
   struct JPT_disktable_cursor* cursors;
   struct patricia* pat;
   size_t i, j;
@@ -1181,15 +1181,15 @@ jpt_major_compact(struct JPT_info* info)
 
   cursors = calloc(info->disktable_count, sizeof(struct JPT_disktable_cursor));
 
-  n = info->first_disktable;
+  dt = info->first_disktable;
   i = 0;
 
-  while(n)
+  while(dt)
   {
-    cursors[i++].disktable = n;
-    row_count += n->key_info_count;
+    cursors[i++].disktable = dt;
+    row_count += dt->key_info_count;
 
-    n = n->next;
+    dt = dt->next;
   }
 
   row_names = malloc(sizeof(struct JPT_key_info) * row_count);
@@ -1618,9 +1618,9 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 
     if(!cmp)
     {
-      if(n->value != (void*) -1)
+      if(n->data.value != (void*) -1)
       {
-        struct JPT_node_data* d = n->next;
+        struct JPT_node_data* d = n->data.next;
 
         while(d)
         {
@@ -1629,13 +1629,13 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
           d = d->next;
         }
 
-        info->memtable_value_size -= n->value_size;
+        info->memtable_value_size -= n->data.value_size;
         info->memtable_key_size -= strlen(row) + 1;
         --info->memtable_key_count;
         --info->node_count;
 
-        n->value = (void*) -1;
-        n->next = 0;
+        n->data.value = (void*) -1;
+        n->data.next = 0;
 
         found = 1;
       }
@@ -1932,7 +1932,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
   struct JPT_disktable_cursor cursor;
   struct JPT_node** nodes = 0;
   struct JPT_node** iterator = 0;
-  struct JPT_disktable* n;
+  struct JPT_disktable* dt;
   const char* c;
   uint32_t columnidx, hash;
   size_t i;
@@ -1964,7 +1964,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
       for(i = 0; i < iterator - nodes; ++i)
       {
         struct JPT_node* n = nodes[i];
-        struct JPT_node_data* d = n->next;
+        struct JPT_node_data* d = n->data.next;
 
         while(d)
         {
@@ -1973,33 +1973,33 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
           d = d->next;
         }
 
-        info->memtable_value_size -= n->value_size;
+        info->memtable_value_size -= n->data.value_size;
         info->memtable_key_size -= strlen(n->row) + 1;
         --info->memtable_key_count;
         --info->node_count;
 
-        n->value = (void*) -1;
-        n->next = 0;
+        n->data.value = (void*) -1;
+        n->data.next = 0;
       }
     }
 
     free(nodes);
   }
 
-  n = info->first_disktable;
+  dt = info->first_disktable;
 
   memset(&cursor, 0, sizeof(cursor));
 
-  while(n)
+  while(dt)
   {
     struct JPT_key_info key_info;
     size_t first, len, half, middle;
     size_t this_columnidx;
     unsigned char cellmeta[4];
 
-    cursor.disktable = n;
+    cursor.disktable = dt;
 
-    first = patricia_lookup_prefix(n->pat, prefix);
+    first = patricia_lookup_prefix(dt->pat, prefix);
     len = cursor.disktable->key_info_count - first;
 
     if(len > 0)
@@ -2075,7 +2075,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
       }
     }
 
-    n = n->next;
+    dt = dt->next;
   }
 
   free(cursor.buffer);
@@ -2189,7 +2189,7 @@ int
 jpt_has_key(struct JPT_info* info, const char* row, const char* column)
 {
   int bloom_indices[4];
-  struct JPT_disktable* n;
+  struct JPT_disktable* dt;
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
   uint32_t columnidx;
   int result;
@@ -2210,13 +2210,13 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
   JPT_generate_key(key, row, columnidx);
   JPT_bloom_filter_indices(bloom_indices, key);
 
-  n = info->first_disktable;
+  dt = info->first_disktable;
 
-  while(n)
+  while(dt)
   {
-    if(JPT_BLOOM_FILTER_TEST(n->bloom_filter, bloom_indices))
+    if(JPT_BLOOM_FILTER_TEST(dt->bloom_filter, bloom_indices))
     {
-      if(0 == JPT_disktable_has_key(n, row, columnidx))
+      if(0 == JPT_disktable_has_key(dt, row, columnidx))
       {
         JPT_reader_leave(info);
 
@@ -2224,7 +2224,7 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
       }
     }
 
-    n = n->next;
+    dt = dt->next;
   }
 
   result = JPT_memtable_has_key(info, row, columnidx);
@@ -2385,7 +2385,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
   struct JPT_node** nodes = 0;
   struct JPT_node** iterator = 0;
   struct JPT_node** nodes_end = 0;
-  struct JPT_disktable* n;
+  struct JPT_disktable* dt;
   struct JPT_disktable_cursor* cursors;
   char* cat_buffer = 0;
   size_t cat_buffer_size = 0;
@@ -2418,13 +2418,13 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
 
   cursors = calloc(info->disktable_count, sizeof(struct JPT_disktable_cursor));
   i = 0;
-  n = info->first_disktable;
+  dt = info->first_disktable;
 
-  while(n)
+  while(dt)
   {
-    cursors[i++].disktable = n;
+    cursors[i++].disktable = dt;
 
-    n = n->next;
+    dt = dt->next;
   }
 
   for(;;)
@@ -2513,7 +2513,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
         else if(cmp == 0)
         {
           ++equal_count;
-          equal_size += (*iterator)->value_size;
+          equal_size += (*iterator)->data.value_size;
         }
       }
     }
@@ -2550,7 +2550,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
         assert((*iterator)->columnidx == mincol);
         assert(!strcmp((*iterator)->row, minrow));
 
-        memcpy(o, (*iterator)->value, (*iterator)->value_size);
+        memcpy(o, (*iterator)->data.value, (*iterator)->data.value_size);
         ++iterator;
       }
 
@@ -2571,7 +2571,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
       else
       {
         res = callback((*iterator)->row, JPT_get_column_name(info, mincol),
-                       (*iterator)->value, (*iterator)->value_size,
+                       (*iterator)->data.value, (*iterator)->data.value_size,
                        &(*iterator)->timestamp, arg);
 
         ++iterator;
@@ -2608,7 +2608,7 @@ jpt_column_scan(struct JPT_info* info, const char* column,
   struct JPT_node** nodes = 0;
   struct JPT_node** iterator = 0;
   struct JPT_node** nodes_end = 0;
-  struct JPT_disktable* n;
+  struct JPT_disktable* dt;
   struct JPT_disktable_cursor* cursors;
   char* row = 0;
   char* start_row = 0;
@@ -2664,30 +2664,30 @@ restart:
   cursor_count = info->disktable_count;
   cursors = calloc(cursor_count, sizeof(struct JPT_disktable_cursor));
   i = 0;
-  n = info->first_disktable;
+  dt = info->first_disktable;
 
-  while(n)
+  while(dt)
   {
     struct JPT_key_info last;
     char last_column[COLUMN_PREFIX_SIZE];
 
-    if(n->key_infos_mapped)
+    if(dt->key_infos_mapped)
     {
-      last = n->key_infos[n->key_info_count - 1];
+      last = dt->key_infos[dt->key_info_count - 1];
     }
     else
     {
-      if(sizeof(struct JPT_key_info) != pread64(info->fd, &last, sizeof(struct JPT_key_info), n->key_info_offset + (n->key_info_count - 1) * sizeof(struct JPT_key_info)))
+      if(sizeof(struct JPT_key_info) != pread64(info->fd, &last, sizeof(struct JPT_key_info), dt->key_info_offset + (dt->key_info_count - 1) * sizeof(struct JPT_key_info)))
         goto fail;
     }
 
     if(info->map_size)
     {
-      memcpy(last_column, info->map + last.offset + n->offset, COLUMN_PREFIX_SIZE);
+      memcpy(last_column, info->map + last.offset + dt->offset, COLUMN_PREFIX_SIZE);
     }
     else
     {
-      if(COLUMN_PREFIX_SIZE != pread64(info->fd, last_column, COLUMN_PREFIX_SIZE, last.offset + n->offset))
+      if(COLUMN_PREFIX_SIZE != pread64(info->fd, last_column, COLUMN_PREFIX_SIZE, last.offset + dt->offset))
         goto fail;
     }
 
@@ -2701,9 +2701,9 @@ restart:
 
       cursor = &cursors[i];
 
-      cursor->disktable = n;
+      cursor->disktable = dt;
 
-      first = patricia_lookup_prefix(n->pat, prefix);
+      first = patricia_lookup_prefix(dt->pat, prefix);
       len = cursor->disktable->key_info_count - first;
 
       if(len > 0)
@@ -2753,7 +2753,7 @@ restart:
         ++i;
     }
 
-    n = n->next;
+    dt = dt->next;
   }
 
   cursor_count = i;
@@ -2857,7 +2857,7 @@ restart:
         min = (*iterator)->row;
         minidx = (uint32_t) ~0;
         keylen = strlen((*iterator)->row) + 1;
-        equal_size = (*iterator)->value_size;
+        equal_size = (*iterator)->data.value_size;
       }
       else
       {
@@ -2869,12 +2869,12 @@ restart:
           minidx = (uint32_t) ~0;
           equal_count = 1;
           keylen = strlen((*iterator)->row) + 1;
-          equal_size = (*iterator)->value_size;
+          equal_size = (*iterator)->data.value_size;
         }
         else if(cmp == 0)
         {
           ++equal_count;
-          equal_size += (*iterator)->value_size;
+          equal_size += (*iterator)->data.value_size;
         }
       }
     }
@@ -2912,8 +2912,8 @@ restart:
         assert(equal_count == 1);
         assert(!strcmp((*iterator)->row, min));
 
-        memcpy(o, (*iterator)->value, (*iterator)->value_size);
-        o += (*iterator)->value_size;
+        memcpy(o, (*iterator)->data.value, (*iterator)->data.value_size);
+        o += (*iterator)->data.value_size;
         ++iterator;
       }
 
@@ -2973,9 +2973,9 @@ restart:
         uint64_t timestamp;
         size_t size;
 
-        size = (*iterator)->value_size;
+        size = (*iterator)->data.value_size;
 
-        memcpy(cat_buffer, (*iterator)->value, size);
+        memcpy(cat_buffer, (*iterator)->data.value, size);
         memcpy(cat_buffer + size, (*iterator)->row, keylen);
         timestamp = (*iterator)->timestamp;
 

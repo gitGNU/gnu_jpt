@@ -113,7 +113,7 @@ given column index.
 
 @< Add current node to result list, if not removed @>=
 
-  if(n->value != (void*) -1)
+  if(n->data.value != (void*) -1)
   {
     **nodes = n;
     ++(*nodes);
@@ -123,7 +123,7 @@ given column index.
 
 @< Add current node to result list, if correct column and not removed @>=
 
-  if(n->columnidx == columnidx && n->value != (void*) -1)
+  if(n->columnidx == columnidx && n->data.value != (void*) -1)
   {
     **nodes = n;
     ++(*nodes);
@@ -195,7 +195,7 @@ search key.
 
       JPT_memtable_splay(info, n);
 
-      if(n->value == (void*) -1)
+      if(n->data.value == (void*) -1)
         return -1;
 
       return 0;
@@ -257,7 +257,7 @@ a sort of tombstone.
 
 @< Read value at current node @>=
 
-  if(n->value == (void*) -1)
+  if(n->data.value == (void*) -1)
     return -1;
 
   i = *value_size;
@@ -289,15 +289,15 @@ is responsible for making sure the target buffer can hold this amount of data.
   if(*value_size > *max_read)
     *value_size = *max_read;
 
-  if(i + n->value_size <= *value_size)
-    amount = n->value_size;
+  if(i + n->data.value_size <= *value_size)
+    amount = n->data.value_size;
   else
     amount = *value_size - i;
 
-  memcpy(((char*) *value) + i, n->value, amount);
+  memcpy(((char*) *value) + i, n->data.value, amount);
   i += amount;
 
-  for(d = n->next; i < *value_size; d = d->next)
+  for(d = n->data.next; i < *value_size; d = d->next)
   {
     if(i + d->value_size <= *value_size)
       amount = d->value_size;
@@ -316,10 +316,10 @@ we're going to put into it.
 
   *value = realloc(*value, *value_size + 1);
 
-  memcpy(((char*) *value) + i, n->value, n->value_size);
-  i += n->value_size;
+  memcpy(((char*) *value) + i, n->data.value, n->data.value_size);
+  i += n->data.value_size;
 
-  for(d = n->next; i < *value_size; d = d->next)
+  for(d = n->data.next; i < *value_size; d = d->next)
   {
     memcpy(((char*) *value) + i, d->value, d->value_size);
     i += d->value_size;
@@ -330,8 +330,8 @@ added to a linked list.
 
 @< Determine value size of current node @>=
 
-  *value_size += n->value_size;
-  d = n->next;
+  *value_size += n->data.value_size;
+  d = n->data.next;
 
   while(d)
   {
@@ -570,22 +570,22 @@ than our buffer size.
 
     result = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node));
     result->row = JPT_memtable_buffer_alloc(info, strlen(row) + 1);
-    result->value_size = value_size;
+    result->data.value_size = value_size;
+    result->data.next = 0;
     result->parent = 0;
     result->left = 0;
     result->right = 0;
-    result->next = 0;
     result->last = 0;
     result->columnidx = columnidx;
 
     strcpy(result->row, row);
 
     if(will_compact)
-      result->value = (char*) value;
+      result->data.value = (char*) value;
     else
     {
-      result->value = JPT_memtable_buffer_alloc(info, value_size);
-      memcpy(result->value, value, value_size);
+      result->data.value = JPT_memtable_buffer_alloc(info, value_size);
+      memcpy(result->data.value, value, value_size);
     }
 
     return result;
@@ -668,7 +668,7 @@ JPT_memtable_insert(struct JPT_info* info, const char* row, uint32_t columnidx,
       continue;
     }
 
-    if(n->value == (void*) -1)
+    if(n->data.value == (void*) -1)
     {
       @< Reuse existing node (value was previously removed) @>
     }
@@ -737,19 +737,22 @@ done:
     goto done;
   }
 
-@ @< Reuse existing node (value was previously removed) @>=
+@ When replacing a previously removed value, we don't need to allocate room for
+a new node; we can just just the tombstone of the previous value.
+
+@< Reuse existing node (value was previously removed) @>=
 
   if(must_compact)
-    n->value = (char*) value;
+    n->data.value = (char*) value;
   else
   {
-    n->value = JPT_memtable_buffer_alloc(info, value_size);
-    memcpy(n->value, value, value_size);
+    n->data.value = JPT_memtable_buffer_alloc(info, value_size);
+    memcpy(n->data.value, value, value_size);
   }
 
   n->timestamp = *timestamp;
-  n->value_size = value_size;
-  n->next = 0;
+  n->data.value_size = value_size;
+  n->data.next = 0;
   n->last = 0;
 
   info->memtable_value_size += value_size;
@@ -757,13 +760,16 @@ done:
   ++info->node_count;
   ++info->memtable_key_count;
 
-@ @< Append value to current node @>=
+@ To append data to an existing node, we just have to create a new data node
+and add it at the end of the linked list belonging to the node.
+
+@< Append value to current node @>=
 
   struct JPT_node_data* d = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node_data));
 
   if(!n->last)
   {
-    n->next = d;
+    n->data.next = d;
     n->last = d;
   }
   else
@@ -787,93 +793,85 @@ done:
 
   info->memtable_value_size += value_size;
 
-@ @< Replace value in current node @>=
+@ When replacing a value, we start by using any previously allocated space,
+then create a new data node for the remaining part of the new value.
 
-  if(n->value_size >= value_size)
+@< Replace value in current node @>=
+
+  struct JPT_node_data* d;
+
+  d = &n->data;
+
+  @< Shrink data node if remainder of value fits inside @>
+  @< Overwrite data in current data node @>
+
+  n->last = 0;
+  d = d->next;
+
+  while(d && value_size)
   {
-    info->memtable_value_size -= n->value_size;
+    @< Shrink data node if remainder of value fits inside @>
+    @< Overwrite data in current data node @>
+
+    n->last = d;
+    d = d->next;
+  }
+
+  while(d)
+  {
+    info->memtable_value_size -= d->value_size;
+
+    d = d->next;
+  }
+
+  if(!n->last)
+    n->data.next = 0;
+
+  if(value_size)
+  {
+    d = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node_data));
+
+    if(must_compact)
+      d->value = (char*) value;
+    else
+    {
+      d->value = JPT_memtable_buffer_alloc(info, value_size);
+      memcpy(d->value, value, value_size);
+    }
+
+    d->value_size = value_size;
+    d->next = 0;
+
     info->memtable_value_size += value_size;
 
-    memcpy(n->value, value, value_size);
-    n->value_size = value_size;
-
-    struct JPT_node_data* d = n->next;
-
-    while(d)
+    if(n->data.next)
     {
-      info->memtable_value_size -= d->value_size;
-
-      d = d->next;
-    }
-
-    n->next = 0;
-    n->last = 0;
-  }
-  else
-  {
-    memcpy(n->value, value, n->value_size);
-    value = (char*) value + n->value_size;
-    value_size -= n->value_size;
-
-    struct JPT_node_data* d = n->next;
-    n->last = 0;
-
-    while(d && value_size)
-    {
-      if(d->value_size >= value_size)
-      {
-        info->memtable_value_size -= d->value_size;
-        info->memtable_value_size += value_size;
-        d->value_size = value_size;
-      }
-
-      memcpy(d->value, value, d->value_size);
-
-      value = (char*) value + d->value_size;
-      value_size -= d->value_size;
-
+      n->last->next = d;
       n->last = d;
-
-      d = d->next;
     }
-
-    while(d)
+    else
     {
-      info->memtable_value_size -= d->value_size;
-
-      d = d->next;
+      n->data.next = d;
+      n->last = d;
     }
-
-    if(value_size)
-    {
-      d = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node_data));
-
-      if(must_compact)
-        d->value = (char*) value;
-      else
-      {
-        d->value = JPT_memtable_buffer_alloc(info, value_size);
-        memcpy(d->value, value, value_size);
-      }
-
-      d->value_size = value_size;
-      d->next = 0;
-
-      info->memtable_value_size += value_size;
-
-      if(n->next)
-      {
-        n->last->next = d;
-        n->last = d;
-      }
-      else
-      {
-        n->next = d;
-        n->last = d;
-      }
-    }
-    else if(n->last)
-      n->last->next = 0;
   }
+  else if(n->last)
+    n->last->next = 0;
 
   n->timestamp = *timestamp;
+
+@ @< Shrink data node if remainder of value fits inside @>=
+
+  if(d->value_size >= value_size)
+  {
+    info->memtable_value_size -= d->value_size;
+    info->memtable_value_size += value_size;
+    d->value_size = value_size;
+  }
+
+@ @< Overwrite data in current data node @>=
+
+  memcpy(d->value, value, d->value_size);
+
+  value = (char*) value + d->value_size;
+  value_size -= d->value_size;

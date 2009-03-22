@@ -46,23 +46,24 @@ extern __thread char* JPT_last_error;
 
 struct JPT_node_data
 {
+  struct JPT_node_data* next;
   void* value;
   size_t value_size;
-  struct JPT_node_data* next;
 };
 
 struct JPT_node
 {
   uint64_t timestamp;
+
+  char* row;
+  uint32_t columnidx;
+
   struct JPT_node* parent;
   struct JPT_node* left;
   struct JPT_node* right;
-  struct JPT_node_data* next;
   struct JPT_node_data* last;
-  char* row;
-  void* value;
-  uint32_t value_size;
-  uint32_t columnidx;
+
+  struct JPT_node_data data;
 };
 
 struct JPT_column
