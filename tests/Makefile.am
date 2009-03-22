@@ -1,5 +1,7 @@
-check_PROGRAMS = test-00
+check_PROGRAMS = test-00 test-journal-00
 TESTS = $(check_PROGRAMS)
 
-test_00_SOURCES = test-00.c
+AM_CPPFLAGS = -I../libjpt/
+
 test_00_LDADD = ../libjpt.la 
+test_journal_00_LDADD = ../libjpt.la
