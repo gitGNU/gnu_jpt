@@ -35,7 +35,9 @@ DJPT_parse_error(struct DJPT_request_error* error)
 {
   errno = ntohl(error->error);
   if(error->message[0])
-    DJPT_last_error = strdup(error->message);
+    asprintf(&DJPT_last_error, "Remote error: %s", strdup(error->message));
+  else
+    asprintf(&DJPT_last_error, "Remote system error: %s", strerror(errno));
 }
 
 static void
@@ -56,20 +58,34 @@ DJPT_read_request(struct DJPT_peer* peer)
   header.size = ntohl(header.size);
 
   if(header.size < 5)
+  {
+    asprintf(&DJPT_last_error, "Too small request size from peer: Got %u bytes", (unsigned int) header.size);
+
     return 0;
+  }
 
   if(header.size > DJPT_MAX_REQUEST_SIZE)
+  {
+    asprintf(&DJPT_last_error, "Too large request size from peer: Got %u bytes", (unsigned int) header.size);
+
     return 0;
+  }
 
   request = malloc(header.size);
 
   if(!request)
+  {
+    asprintf(&DJPT_last_error, "Allocating %u bytes for peer request failed: %s", (unsigned int) header.size, strerror(errno));
+
     return 0;
+  }
 
   memcpy(request, &header, 5);
 
   if(-1 == DJPT_read_all(peer, request->data, request->size - 5))
   {
+    asprintf(&DJPT_last_error, "Read error while reading request from peer: %s", strerror(errno));
+
     free(request);
 
     return 0;
@@ -624,17 +640,24 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
 
   tempdb = jpt_init(tempname, 1024 * 1024, 0);
 
-  close(tempfd);
-  unlink(tempname);
-  strcat(tempname, ".log");
-  unlink(tempname);
-
   if(!tempdb)
   {
+    asprintf(&DJPT_last_error, "Failed to create temporary table for scanning: %s", jpt_last_error());
+
+    close(tempfd);
+    unlink(tempname);
+    strcat(tempname, ".log");
+    unlink(tempname);
+
     free(response);
 
     return -1;
   }
+
+  close(tempfd);
+  unlink(tempname);
+  strcat(tempname, ".log");
+  unlink(tempname);
 
   while(res == 0)
   {
@@ -659,7 +682,10 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
         break;
       }
       else
+      {
+        asprintf(&DJPT_last_error, "Got unexpected response to column scan: %d", response->command);
         res = -1;
+      }
     }
     else
       res = -1;
