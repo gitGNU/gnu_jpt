@@ -173,6 +173,7 @@ LIBTOOL = @LIBTOOL@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MAYBE_PHP = @MAYBE_PHP@
 MKDIR_P = @MKDIR_P@
 NMEDIT = @NMEDIT@
 OBJEXT = @OBJEXT@
@@ -244,7 +245,7 @@ top_srcdir = @top_srcdir@
 lib_LTLIBRARIES = libjpt.la libdjpt.la
 include_HEADERS = libjpt/jpt.h djpt/djpt.h
 noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
-SUBDIRS = tests php
+SUBDIRS = tests $(MAYBE_PHP)
 AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/jptl
 jpt_control_SOURCES = jpt-control.c
@@ -268,7 +269,7 @@ libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0
 all: all-recursive
 
 .SUFFIXES:
-.SUFFIXES: .c .lo .o .obj
+.SUFFIXES: .c .lo .o .obj .x
 am--refresh:
 	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
@@ -935,7 +936,7 @@ uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
 	uninstall-libLTLIBRARIES
 
 
-%.c: %.x
+.x.c:
 	ctanglex $<
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

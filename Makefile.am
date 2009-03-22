@@ -5,7 +5,7 @@ include_HEADERS = libjpt/jpt.h djpt/djpt.h
 noinst_PROGRAMS = stress-test
 noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
 
-SUBDIRS = tests php
+SUBDIRS = tests $(MAYBE_PHP)
 
 AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/jptl
@@ -34,5 +34,5 @@ libdjpt_la_LIBADD = libdjpt-common.la -ljpt
 libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
 libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0
 
-%.c: %.x
+.x.c:
 	ctanglex $<

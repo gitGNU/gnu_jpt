@@ -6,6 +6,18 @@ AC_PROG_LIBTOOL
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 
-AC_CONFIG_SUBDIRS([php])
+AC_ARG_WITH([php],
+            [AS_HELP_STRING([--with-php], [build djpt PHP module<:@default=no@:>@])],
+            [], [with_php=no])
+
+AS_IF([test "x$with_php" != xno], AC_CONFIG_SUBDIRS([php]), [echo Not building djpt PHP module])
+
+if test "x$with_php" != xno; then
+  MAYBE_PHP=php
+else
+  MAYBE_PHP=
+fi
+AC_SUBST([MAYBE_PHP])
+
 
 AC_OUTPUT([tests/Makefile Makefile])
