@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
@@ -185,7 +186,12 @@ JPT_writev(int fd, const struct iovec *iov, int iovcnt)
   int i;
 
   for(i = 0; i < iovcnt; ++i)
+  {
+    assert(iov[i].iov_base);
+    assert(iov[i].iov_len);
+
     size += iov[i].iov_len;
+  }
 
   ret = writev(fd, iov, iovcnt);
 
