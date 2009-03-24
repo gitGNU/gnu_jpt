@@ -973,7 +973,7 @@ JPT_compact(struct JPT_info* info)
 
   for(i = 0; i < info->node_count; ++i)
   {
-    struct JPT_node_data* d = nodes[i]->data.next;
+    struct JPT_node_data* d = &nodes[i]->data;
     size_t keylen;
 
     JPT_generate_key(key_buf, nodes[i]->row, nodes[i]->columnidx);
@@ -984,31 +984,28 @@ JPT_compact(struct JPT_info* info)
     {
       memcpy(info->map + offset, key_buf, keylen);
       offset += keylen;
-      memcpy(info->map + offset, nodes[i]->data.value, nodes[i]->data.value_size);
-      offset += nodes[i]->data.value_size;
 
-      while(d)
+      do
       {
         memcpy(info->map + offset, d->value, d->value_size);
         offset += d->value_size;
         d = d->next;
       }
+      while(d);
     }
     else
     {
       if(-1 == JPT_write_all(info->fd, key_buf, keylen))
         longjmp(io_error, 1);
 
-      if(-1 == JPT_write_all(info->fd, nodes[i]->data.value, nodes[i]->data.value_size))
-        longjmp(io_error, 1);
-
-      while(d)
+      do
       {
         if(-1 == JPT_write_all(info->fd, d->value, d->value_size))
           longjmp(io_error, 1);
 
         d = d->next;
       }
+      while(d);
     }
   }
 
@@ -1986,7 +1983,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
       for(i = 0; i < iterator - nodes; ++i)
       {
         struct JPT_node* n = nodes[i];
-        struct JPT_node_data* d = n->data.next;
+        struct JPT_node_data* d = &n->data;
 
         while(d)
         {
@@ -1995,7 +1992,6 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
           d = d->next;
         }
 
-        info->memtable_value_size -= n->data.value_size;
         info->memtable_key_size -= strlen(n->row) + 1;
         --info->memtable_key_count;
         --info->node_count;

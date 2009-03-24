@@ -293,15 +293,7 @@ is responsible for making sure the target buffer can hold this amount of data.
   if(*value_size > *max_read)
     *value_size = *max_read;
 
-  if(i + n->data.value_size <= *value_size)
-    amount = n->data.value_size;
-  else
-    amount = *value_size - i;
-
-  memcpy(((char*) *value) + i, n->data.value, amount);
-  i += amount;
-
-  for(d = n->data.next; i < *value_size; d = d->next)
+  for(d = &n->data; i < *value_size; d = d->next)
   {
     if(i + d->value_size <= *value_size)
       amount = d->value_size;
@@ -320,10 +312,7 @@ we're going to put into it.
 
   *value = realloc(*value, *value_size + 1);
 
-  memcpy(((char*) *value) + i, n->data.value, n->data.value_size);
-  i += n->data.value_size;
-
-  for(d = n->data.next; i < *value_size; d = d->next)
+  for(d = &n->data; i < *value_size; d = d->next)
   {
     memcpy(((char*) *value) + i, d->value, d->value_size);
     i += d->value_size;
@@ -334,14 +323,14 @@ added to a linked list.
 
 @< Determine value size of current node @>=
 
-  *value_size += n->data.value_size;
-  d = n->data.next;
+  d = &n->data;
 
-  while(d)
+  do
   {
     *value_size += d->value_size;
     d = d->next;
   }
+  while(d);
 
 @ All splay work is performed by |JPT_memtable_splay|.  A call to this function
 brings the specified node to the top of the binary tree, reorganizaing the tree
