@@ -46,7 +46,7 @@
 #define TRACE(x)
 #endif
 
-#define IOV_SET(iov, n, base, len) do { iov[n].iov_base = (void*) base; iov[n].iov_len = len; } while(0)
+#define IOV_SET(iov, n, base, len) do { int tmp = (n); iov[tmp].iov_base = (void*) base; iov[tmp].iov_len = len; } while(0)
 
 static int
 JPT_log_reset(struct JPT_info* info);
@@ -1860,8 +1860,6 @@ JPT_log_reset(struct JPT_info* info)
 static int
 JPT_log_begin(struct JPT_info* info)
 {
-  struct iovec iov[1];
-
   assert(!info->logbuf_fill);
   assert(info->is_writing);
 
@@ -1876,12 +1874,14 @@ JPT_log_begin(struct JPT_info* info)
 
   JPT_log_append_uint64(info, info->file_size);
 
-  IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
+  if(-1 == JPT_write_all(info->logfd, info->logbuf, info->logbuf_fill))
+  {
+    info->logbuf_fill = 0;
+
+    return -1;
+  }
 
   info->logbuf_fill = 0;
-
-  if(-1 == JPT_writev(info->logfd, iov, 1))
-    return -1;
 
   if(info->flags & JPT_SYNC)
     fdatasync(info->logfd);
