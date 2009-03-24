@@ -918,29 +918,34 @@ JPT_compact(struct JPT_info* info)
     return -1;
   }
 
+#if IOV_MAX < 1024
+#  define IOV_SIZE IOV_MAX
+#else
+#  define IOV_SIZE 1024
+#endif
+
+  struct iovec iov[IOV_SIZE];
+  size_t iovn = 0;
+
   uint32_t version = JPT_VERSION;
   uint32_t data_size = key_infos[row_count - 1].offset + key_infos[row_count - 1].size;
 
-  if(-1 == JPT_write_all(info->fd, JPT_PARTIAL_WRITE, 4))
+  IOV_SET(iov, iovn++, JPT_PARTIAL_WRITE, 4);
+  IOV_SET(iov, iovn++, &version, sizeof(uint32_t));
+  IOV_SET(iov, iovn++, &row_count, sizeof(uint32_t));
+  IOV_SET(iov, iovn++, &data_size, sizeof(uint32_t));
+  IOV_SET(iov, iovn++, disktable->bloom_filter, sizeof(disktable->bloom_filter));
+
+  if(-1 == JPT_writev(info->fd, iov, iovn))
     longjmp(io_error, 1);
 
-  if(-1 == JPT_write_all(info->fd, &version, sizeof(uint32_t)))
-    longjmp(io_error, 1);
-
-  if(-1 == JPT_write_all(info->fd, &row_count, sizeof(uint32_t)))
-    longjmp(io_error, 1);
-
-  if(-1 == JPT_write_all(info->fd, &data_size, sizeof(uint32_t)))
-    longjmp(io_error, 1);
-
-  if(-1 == JPT_write_all(info->fd, disktable->bloom_filter, sizeof(disktable->bloom_filter)))
-    longjmp(io_error, 1);
+  iovn = 0;
 
   disktable->pat_offset = lseek64(info->fd, 0, SEEK_CUR);
 
   if(-1 == patricia_write(pat, info->fd))
   {
-    asprintf(&JPT_last_error, "Failed to write PATRICIA trie failed: %s", strerror(errno));
+    asprintf(&JPT_last_error, "Failed to write PATRICIA trie: %s", strerror(errno));
 
     longjmp(io_error, 1);
   }
