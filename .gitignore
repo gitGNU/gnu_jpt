@@ -12,3 +12,5 @@ libtool
 jpt-control
 djptd
 stress-test
+config.h
+stamp-h1
