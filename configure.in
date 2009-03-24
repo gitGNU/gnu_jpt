@@ -25,4 +25,6 @@ fi
 AC_SUBST([MAYBE_PHP])
 
 
+AC_CONFIG_HEADER([config.h])
+
 AC_OUTPUT([tests/Makefile Makefile])

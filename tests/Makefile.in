@@ -40,6 +40,7 @@ am__aclocal_m4_deps = $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
+CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 test_00_SOURCES = test-00.c
 test_00_OBJECTS = test-00.$(OBJEXT)
@@ -50,7 +51,7 @@ test_01_DEPENDENCIES = ../libjpt.la
 test_journal_00_SOURCES = test-journal-00.c
 test_journal_00_OBJECTS = test-journal-00.$(OBJEXT)
 test_journal_00_DEPENDENCIES = ../libjpt.la
-DEFAULT_INCLUDES = -I.@am__isrc@
+DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
