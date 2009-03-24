@@ -1013,8 +1013,11 @@ JPT_compact(struct JPT_info* info)
   if(-1 == JPT_write_all(info->fd, JPT_SIGNATURE, 4))
     longjmp(io_error, 1);
 
-  if(-1 == fdatasync(info->fd))
-    longjmp(io_error, 1);
+  if(info->flags & JPT_SYNC)
+  {
+    if(-1 == fdatasync(info->fd))
+      longjmp(io_error, 1);
+  }
 
   if(-1 == JPT_log_reset(info))
     longjmp(io_error, 1);
@@ -1843,8 +1846,11 @@ JPT_log_reset(struct JPT_info* info)
   if(-1 == ftruncate(info->logfd, 0))
     return -1;
 
-  if(-1 == fdatasync(info->logfd))
-    return -1;
+  if(info->flags & JPT_SYNC)
+  {
+    if(-1 == fdatasync(info->logfd))
+      return -1;
+  }
 
   info->logfile_empty = 1;
 
