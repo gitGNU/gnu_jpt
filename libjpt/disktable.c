@@ -27,7 +27,7 @@
 int
 JPT_disktable_read_keyinfo(struct JPT_disktable* disktable, struct JPT_key_info* target, size_t keyidx)
 {
-  int res;
+  ssize_t res;
 
   if(disktable->key_infos_mapped)
   {
@@ -39,11 +39,47 @@ JPT_disktable_read_keyinfo(struct JPT_disktable* disktable, struct JPT_key_info*
   res = pread64(disktable->info->fd, target, sizeof(struct JPT_key_info),
                 disktable->key_info_offset + keyidx * sizeof(struct JPT_key_info));
 
-  if(res != sizeof(struct JPT_key_info))
+  if(res == -1)
     return -1;
+
+  if(res != sizeof(struct JPT_key_info))
+  {
+    asprintf(&JPT_last_error, "Short read: Got %zu bytes, expected %zu", res, sizeof(struct JPT_key_info));
+
+    return -1;
+  }
 
   return 0;
 }
+
+int
+JPT_disktable_write_keyinfo(struct JPT_disktable* disktable, const struct JPT_key_info* source, size_t keyidx)
+{
+  ssize_t res;
+
+  if(disktable->key_infos_mapped)
+  {
+    memcpy(disktable->key_infos + keyidx, source, sizeof(struct JPT_key_info));
+
+    return 0;
+  }
+
+  res = pwrite64(disktable->info->fd, source, sizeof(struct JPT_key_info),
+                 disktable->key_info_offset + keyidx * sizeof(struct JPT_key_info));
+
+  if(res == -1)
+    return -1;
+
+  if(res != sizeof(struct JPT_key_info))
+  {
+    asprintf(&JPT_last_error, "Short write: Wrote %zu bytes, wanted to write %zu", res, sizeof(struct JPT_key_info));
+
+    return -1;
+  }
+
+  return 0;
+}
+
 
 int
 JPT_disktable_read(struct JPT_disktable* disktable, void* target, size_t size, size_t offset)
@@ -88,7 +124,7 @@ JPT_disktable_has_key(struct JPT_disktable* disktable,
   if(-1 == JPT_DISKTABLE_READ_KEYINFO(disktable, &key_info, idx))
     return -1;
 
-  if(key_info.size < key_size)
+  if(key_info.size < key_size || (key_info.flags & JPT_KEY_REMOVED))
     return -1;
 
   if(disktable->info->map_size)
@@ -142,7 +178,8 @@ JPT_disktable_remove(struct JPT_disktable* disktable,
   if(-1 == JPT_DISKTABLE_READ_KEYINFO(disktable, &key_info, idx))
     return -1;
 
-  if(key_info.size < key_size)
+  if((key_info.flags & JPT_KEY_REMOVED)
+  || key_info.size < key_size)
   {
     errno = ENOENT;
 
@@ -157,8 +194,6 @@ JPT_disktable_remove(struct JPT_disktable* disktable,
 
       return -1;
     }
-
-    info->map[disktable->offset + key_info.offset + COLUMN_PREFIX_SIZE] = 0;
   }
   else
   {
@@ -171,12 +206,12 @@ JPT_disktable_remove(struct JPT_disktable* disktable,
 
       return -1;
     }
-
-    char zero = 0;
-
-    if(1 != pwrite64(info->fd, &zero, 1, disktable->offset + key_info.offset + COLUMN_PREFIX_SIZE))
-      return -1;
   }
+
+  key_info.flags |= JPT_KEY_REMOVED;
+
+  if(-1 == JPT_DISKTABLE_WRITE_KEYINFO(disktable, &key_info, idx))
+    return -1;
 
   return 0;
 }
@@ -216,7 +251,7 @@ JPT_disktable_overwrite(struct JPT_disktable* disktable,
   size = key_info.size;
   offset = key_info.offset;
 
-  if(size < key_size)
+  if(size < key_size || (key_info.flags & JPT_KEY_REMOVED))
   {
     errno = ENOENT;
 
@@ -312,7 +347,7 @@ JPT_disktable_get(struct JPT_disktable* disktable,
 
   size = key_info.size;
 
-  if(size < key_size)
+  if(size < key_size || (key_info.flags & JPT_KEY_REMOVED))
   {
     errno = ENOENT;
 
@@ -390,10 +425,12 @@ repeat:
       return 0;
     }
 
-    if(-1 == JPT_DISKTABLE_READ_KEYINFO(cursor->disktable, &key_info, cursor->offset))
+    if(-1 == JPT_DISKTABLE_READ_KEYINFO(cursor->disktable, &key_info, cursor->offset++))
       return -1;
 
-    ++cursor->offset;
+    if((key_info.flags & JPT_KEY_REMOVED) && !(key_info.flags & JPT_KEY_NEW_COLUMN))
+      goto repeat;
+
     cursor->data_offset = key_info.offset + cursor->disktable->offset;
     cursor->data_size = key_info.size;
 
@@ -436,7 +473,7 @@ repeat:
     cursor->keylen = strlen(cursor->data) + 1;
     cursor->flags = key_info.flags;
   }
-  while(!cellmeta[COLUMN_PREFIX_SIZE]);
+  while(!cellmeta[COLUMN_PREFIX_SIZE] || (key_info.flags & JPT_KEY_REMOVED));
 
   return 0;
 }

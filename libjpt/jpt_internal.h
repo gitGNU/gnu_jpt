@@ -37,10 +37,17 @@
   (disktable->key_infos_mapped ? (memcpy(target, disktable->key_infos + keyidx, sizeof(struct JPT_key_info)), 0) \
                                : JPT_disktable_read_keyinfo(disktable, target, keyidx))
 
+#define JPT_DISKTABLE_WRITE_KEYINFO(disktable, source, keyidx) \
+  (disktable->key_infos_mapped ? (memcpy(disktable->key_infos + keyidx, source, sizeof(struct JPT_key_info)), 0) \
+                               : JPT_disktable_write_keyinfo(disktable, source, keyidx))
+
 #define JPT_OPERATOR_INSERT         0x0001
 #define JPT_OPERATOR_REMOVE         0x0002
 #define JPT_OPERATOR_CREATE_COLUMN  0x0003
 #define JPT_OPERATOR_REMOVE_COLUMN  0x0004
+
+#define JPT_KEY_REMOVED             0x0001
+#define JPT_KEY_NEW_COLUMN          0x0002
 
 extern __thread int JPT_errno;
 extern __thread char* JPT_last_error;

@@ -38,7 +38,7 @@
 
 #define JPT_PARTIAL_WRITE "LBA_"
 #define JPT_SIGNATURE     "LBAT"
-#define JPT_VERSION       8
+#define JPT_VERSION       9
 
 /* #define TRACE(x) fprintf x ; fflush(stderr); */
 
@@ -863,6 +863,8 @@ JPT_compact(struct JPT_info* info)
   memset(disktable->bloom_filter, 0, sizeof(disktable->bloom_filter));
   disktable->key_infos_mapped = 0;
 
+  uint32_t prev_column = (uint32_t) -1;
+
   for(i = 0; i < info->node_count; ++i)
   {
     if(strlen(nodes[i]->row) + 3 > key_buf_size)
@@ -888,6 +890,13 @@ JPT_compact(struct JPT_info* info)
     key_infos[row_count].offset = offset;
     key_infos[row_count].size = strlen(key_buf) + 1 + nodes[i]->data.value_size;
     key_infos[row_count].flags = 0;
+
+    if(nodes[i]->columnidx != prev_column)
+    {
+      key_infos[row_count].flags |= JPT_KEY_NEW_COLUMN;
+
+      prev_column = nodes[i]->columnidx;
+    }
 
     struct JPT_node_data* d = nodes[i]->data.next;
 
@@ -1197,6 +1206,8 @@ jpt_major_compact(struct JPT_info* info)
 
   pat = patricia_create(JPT_key_info_callback, &callback_args);
 
+  uint32_t prev_column = (uint32_t) -1;
+
   row_count = 0;
 
   for(;;)
@@ -1232,6 +1243,8 @@ jpt_major_compact(struct JPT_info* info)
 
     if(j == row_count)
     {
+      uint32_t columnidx = CELLMETA_TO_COLUMN(min);
+
       JPT_bloom_filter_add(disktable->bloom_filter, min);
 
       row_names[j].offset = cursors[minidx].data_offset;
@@ -1240,7 +1253,14 @@ jpt_major_compact(struct JPT_info* info)
       key_infos[j].timestamp = cursors[minidx].timestamp;
       key_infos[j].offset = offset;
       key_infos[j].size = cursors[minidx].data_size;
-      key_infos[j].flags = cursors[minidx].flags;
+      key_infos[j].flags = 0;
+
+      if(columnidx != prev_column)
+      {
+        key_infos[j].flags |= JPT_KEY_NEW_COLUMN;
+
+        prev_column = columnidx;
+      }
 
       offset += cursors[minidx].data_size;
 
@@ -2486,6 +2506,8 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
   {
     for(i = 0; i < info->disktable_count; ++i)
     {
+      assert(cursors[i].disktable);
+
       while(!cursors[i].data_size && cursors[i].offset < cursors[i].disktable->key_info_count)
       {
         if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], (size_t) -1))
@@ -2510,6 +2532,8 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
     {
       if(!cursors[i].data_size)
         continue;
+
+      assert(cursors[i].disktable);
 
       if(!minrow)
       {
