@@ -393,7 +393,7 @@ test_thread(void* arg)
         pthread_mutex_lock(&col_locks[i]);
 
       jpt_close(db);
-      WANT_POINTER(db = jpt_init("test-db.tab", 1024 * 1024, 0));
+      WANT_POINTER(db = jpt_init("test-db.tab", 128 * 1024, 0));
 
       for(i = 0; i < TOKEN_COUNT; ++i)
         pthread_mutex_unlock(&col_locks[i]);
