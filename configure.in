@@ -10,6 +10,7 @@ AC_ARG_WITH([php],
             [AS_HELP_STRING([--with-php], [build djpt PHP module<:@default=no@:>@])],
             [], [with_php=no])
 
+AC_ARG_ENABLE(coverage, [  --enable-coverage       enable coverage testing], CFLAGS="-fprofile-arcs -ftest-coverage")
 AC_ARG_ENABLE(final, [  --enable-final          enable optimization and disable debug messages], CFLAGS="-O2 -DNDEBUG")
 
 AS_IF([test "x$with_php" != xno], AC_CONFIG_SUBDIRS([php]), [echo Not building djpt PHP module])

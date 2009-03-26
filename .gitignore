@@ -1,4 +1,7 @@
 *.cache
+*.gcda
+*.gcno
+*.gcov
 *.la
 *.lo
 *.log
@@ -8,9 +11,11 @@
 .deps
 .libs
 Makefile
-libtool
-jpt-control
-djptd
-stress-test
 config.h
+core
+core.*
+djptd
+jpt-control
+libtool
 stamp-h1
+stress-test
