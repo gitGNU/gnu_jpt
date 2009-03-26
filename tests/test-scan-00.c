@@ -17,12 +17,13 @@ cell_callback(const char* row, const char* column, const void* data,
 {
   char buf[64];
 
-  WANT_TRUE(data_size == strlen(row));
+  WANT_TRUE(data_size == strlen(column));
+  WANT_TRUE(0 == memcmp(column, data, data_size));
   WANT_TRUE(0 == memcmp(row, data, data_size));
 
   sprintf(buf, "%08zu", count++);
 
-  WANT_TRUE(0 == strcmp(row, buf));
+  WANT_TRUE(0 == strcmp(column, buf));
 
   return 0;
 }
@@ -46,7 +47,7 @@ main(int argc, char** argv)
   {
     sprintf(buf, "%08zu", i);
 
-    WANT_SUCCESS(jpt_insert(db, buf, "column", buf, strlen(buf), 0));
+    WANT_SUCCESS(jpt_insert(db, buf, buf, buf, strlen(buf), 0));
   }
 
   WANT_SUCCESS(jpt_scan(db, cell_callback, 0));
