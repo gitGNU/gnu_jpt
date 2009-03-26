@@ -21,9 +21,7 @@ cell_callback(const char* row, const char* column, const void* data,
   WANT_TRUE(0 == memcmp(column, data, data_size));
   WANT_TRUE(0 == memcmp(row, data, data_size));
 
-  sprintf(buf, "%08zu", count++);
-
-  WANT_TRUE(0 == strcmp(column, buf));
+  ++count;
 
   return 0;
 }
@@ -43,9 +41,9 @@ main(int argc, char** argv)
 
   WANT_POINTER(db = jpt_init("test-db.tab", 128 * 1024, 0));
 
-  for(i = 0; i < 32768; ++i)
+  for(i = 0; i <= 0x7FFF; ++i)
   {
-    sprintf(buf, "%08zu", i);
+    sprintf(buf, "%08zu", i ^ 0x5AAA);
 
     WANT_SUCCESS(jpt_insert(db, buf, buf, buf, strlen(buf), 0));
   }

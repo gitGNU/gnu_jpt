@@ -42,9 +42,9 @@ main(int argc, char** argv)
 
   WANT_POINTER(db = jpt_init("test-db.tab", 128 * 1024, 0));
 
-  for(i = 0; i < 32768; ++i)
+  for(i = 0; i <= 0x7FFF; ++i)
   {
-    sprintf(buf, "%08zu", i);
+    sprintf(buf, "%08zu", i ^ 0x5AAA);
 
     WANT_SUCCESS(jpt_insert(db, buf, "column", buf, strlen(buf), 0));
   }
