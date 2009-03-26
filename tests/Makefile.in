@@ -32,7 +32,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 check_PROGRAMS = test-00$(EXEEXT) test-01$(EXEEXT) \
-	test-journal-00$(EXEEXT) test-backup-00$(EXEEXT)
+	test-backup-00$(EXEEXT) test-column-scan-00$(EXEEXT) \
+	test-journal-00$(EXEEXT) test-scan-00$(EXEEXT)
 subdir = tests
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -54,10 +55,18 @@ test_backup_00_SOURCES = test-backup-00.c
 test_backup_00_OBJECTS = test-backup-00.$(OBJEXT)
 test_backup_00_LDADD = $(LDADD)
 test_backup_00_DEPENDENCIES = ../libjpt.la
+test_column_scan_00_SOURCES = test-column-scan-00.c
+test_column_scan_00_OBJECTS = test-column-scan-00.$(OBJEXT)
+test_column_scan_00_LDADD = $(LDADD)
+test_column_scan_00_DEPENDENCIES = ../libjpt.la
 test_journal_00_SOURCES = test-journal-00.c
 test_journal_00_OBJECTS = test-journal-00.$(OBJEXT)
 test_journal_00_LDADD = $(LDADD)
 test_journal_00_DEPENDENCIES = ../libjpt.la
+test_scan_00_SOURCES = test-scan-00.c
+test_scan_00_OBJECTS = test-scan-00.$(OBJEXT)
+test_scan_00_LDADD = $(LDADD)
+test_scan_00_DEPENDENCIES = ../libjpt.la
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -70,8 +79,10 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = test-00.c test-01.c test-backup-00.c test-journal-00.c
-DIST_SOURCES = test-00.c test-01.c test-backup-00.c test-journal-00.c
+SOURCES = test-00.c test-01.c test-backup-00.c test-column-scan-00.c \
+	test-journal-00.c test-scan-00.c
+DIST_SOURCES = test-00.c test-01.c test-backup-00.c \
+	test-column-scan-00.c test-journal-00.c test-scan-00.c
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -238,9 +249,15 @@ test-01$(EXEEXT): $(test_01_OBJECTS) $(test_01_DEPENDENCIES)
 test-backup-00$(EXEEXT): $(test_backup_00_OBJECTS) $(test_backup_00_DEPENDENCIES) 
 	@rm -f test-backup-00$(EXEEXT)
 	$(LINK) $(test_backup_00_OBJECTS) $(test_backup_00_LDADD) $(LIBS)
+test-column-scan-00$(EXEEXT): $(test_column_scan_00_OBJECTS) $(test_column_scan_00_DEPENDENCIES) 
+	@rm -f test-column-scan-00$(EXEEXT)
+	$(LINK) $(test_column_scan_00_OBJECTS) $(test_column_scan_00_LDADD) $(LIBS)
 test-journal-00$(EXEEXT): $(test_journal_00_OBJECTS) $(test_journal_00_DEPENDENCIES) 
 	@rm -f test-journal-00$(EXEEXT)
 	$(LINK) $(test_journal_00_OBJECTS) $(test_journal_00_LDADD) $(LIBS)
+test-scan-00$(EXEEXT): $(test_scan_00_OBJECTS) $(test_scan_00_DEPENDENCIES) 
+	@rm -f test-scan-00$(EXEEXT)
+	$(LINK) $(test_scan_00_OBJECTS) $(test_scan_00_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -251,7 +268,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-00.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-01.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-backup-00.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-column-scan-00.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-journal-00.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-scan-00.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

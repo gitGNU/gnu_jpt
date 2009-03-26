@@ -1,3 +1,1 @@
-test-??
-test-backup-??
-test-journal-??
+test*-[0-9][0-9]
