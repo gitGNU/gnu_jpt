@@ -99,6 +99,7 @@ struct JPT_info
   int logfile_empty;
   unsigned char logbuf[256]; /* For log entry headers */
   size_t logbuf_fill;
+  int replaying; /* To avoid logging while replaying */
 
   char* map;
   off_t map_size;

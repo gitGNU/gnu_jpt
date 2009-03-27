@@ -1541,7 +1541,7 @@ jpt_insert_timestamp(struct JPT_info* info,
   TRACE((stderr, " = %d\n", res));
 
   /* if res == -1, we had an error.  if res == 1, data is already commited */
-  if(res == 0)
+  if(res == 0 && !info->replaying)
   {
     struct iovec iov[4];
     int rowlen = strlen(row);
@@ -1708,6 +1708,8 @@ JPT_log_replay(struct JPT_info* info)
 
   input = fdopen(dup(info->logfd), "r+");
 
+  info->replaying = 1;
+
   while(!feof(input))
   {
     int command;
@@ -1836,6 +1838,9 @@ JPT_log_replay(struct JPT_info* info)
 
 truncate:
 
+  assert(info->replaying);
+  info->replaying = 0;
+
   fclose(input);
   input = 0;
 
@@ -1847,6 +1852,10 @@ truncate:
 
   if(!last_valid)
     info->logfile_empty = 1;
+  else
+  {
+    assert(!info->logfile_empty);
+  }
 
   result = 0;
 
@@ -1865,6 +1874,9 @@ fail:
 static int
 JPT_log_reset(struct JPT_info* info)
 {
+  if(info->replaying)
+    return 0;
+
   if(-1 == lseek(info->logfd, 0, SEEK_SET))
     return -1;
 
@@ -1886,6 +1898,7 @@ static int
 JPT_log_begin(struct JPT_info* info)
 {
   assert(!info->logbuf_fill);
+  assert(!info->replaying);
   assert(info->is_writing && !info->reader_count);
 
   if(!info->logfile_empty)
@@ -1929,7 +1942,7 @@ jpt_remove(struct JPT_info* info, const char* row, const char* column)
 
   res = JPT_remove(info, row, column);
 
-  if(res != -1)
+  if(res != -1 && !info->replaying)
   {
     struct iovec iov[3];
     int rowlen = strlen(row);
@@ -2173,7 +2186,7 @@ jpt_remove_column(struct JPT_info* info, const char* column, int flags)
 
   result = JPT_remove_column(info, column, flags);
 
-  if(result != -1)
+  if(result != -1 && !info->replaying)
   {
     struct iovec iov[2];
     int collen = strlen(column);
@@ -2221,7 +2234,7 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
 
     return -1;
   }
-  else
+  else if(!info->replaying)
   {
     struct iovec iov[2];
 
@@ -2603,6 +2616,8 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
 
     if(!minrow)
       break;
+
+    assert(mincol >= 100);
 
     if(equal_count > 1)
     {
