@@ -273,10 +273,7 @@ JPT_disktable_overwrite(struct JPT_disktable* disktable,
     {
       size = amount;
 
-      if(disktable->key_infos_mapped)
-        disktable->key_infos[idx].size = key_size + size;
-      else
-        key_info.size = key_size + size;
+      key_info.size = key_size + size;
     }
 
     memcpy(info->map + disktable->offset + offset + key_size,
@@ -297,22 +294,15 @@ JPT_disktable_overwrite(struct JPT_disktable* disktable,
     if(size > amount)
     {
       size = amount;
-      if(disktable->key_infos_mapped)
-        disktable->key_infos[idx].size = key_size + size;
-      else
-        key_info.size = key_size + size;
+      key_info.size = key_size + size;
     }
 
     if(-1 == pwrite64(info->fd, value, size, disktable->offset + offset + key_size))
       return -1;
   }
 
-  if(!disktable->key_infos_mapped)
-  {
-    if(-1 == pwrite64(info->fd, &key_info, sizeof(struct JPT_key_info),
-                      disktable->key_info_offset + idx * sizeof(struct JPT_key_info)))
+  if(-1 == JPT_DISKTABLE_WRITE_KEYINFO(disktable, &key_info, idx))
       return -1;
-  }
 
   return size;
 }
@@ -383,11 +373,11 @@ JPT_disktable_get(struct JPT_disktable* disktable,
 
     if(info->map_size)
     {
-      memcpy(*value + old_size, info->map + disktable->offset + key_info.offset + key_size, *value_size - old_size);
+      memcpy(*value + old_size, info->map + disktable->offset + key_info.offset + key_size, size);
     }
     else
     {
-      if(size != pread64(info->fd, *value + old_size, *value_size - old_size, disktable->offset + key_info.offset + key_size))
+      if(size != pread64(info->fd, *value + old_size, size, disktable->offset + key_info.offset + key_size))
       {
         *value_size = old_size;
 
