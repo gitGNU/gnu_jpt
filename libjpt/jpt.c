@@ -98,18 +98,8 @@ JPT_reader_enter(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
   pthread_mutex_lock(&global_lock);
-  assert(!info->reader_count && !info->is_writing);
-  info->reader_count = 1;
 #else
-  pthread_mutex_lock(&info->reader_count_mutex);
-
-  while(info->is_writing)
-    pthread_cond_wait(&info->read_ready, &info->reader_count_mutex);
-  ++info->reader_count;
-
-  pthread_mutex_unlock(&info->reader_count_mutex);
-
-  assert(!info->is_writing);
+  pthread_rwlock_rdlock(&info->rw_lock);
 #endif
 }
 
@@ -117,19 +107,9 @@ static void
 JPT_reader_leave(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
-  assert(info->reader_count);
-  info->reader_count = 0;
   pthread_mutex_unlock(&global_lock);
 #else
-  assert(!info->is_writing);
-  assert(info->reader_count);
-
-  pthread_mutex_lock(&info->reader_count_mutex);
-
-  if(0 == --info->reader_count)
-    pthread_cond_signal(&info->write_ready);
-
-  pthread_mutex_unlock(&info->reader_count_mutex);
+  pthread_rwlock_unlock(&info->rw_lock);
 #endif
 }
 
@@ -138,19 +118,8 @@ JPT_writer_enter(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
   pthread_mutex_lock(&global_lock);
-  assert(!info->reader_count && !info->is_writing);
-  info->is_writing = 1;
 #else
-  pthread_mutex_lock(&info->reader_count_mutex);
-
-  while(info->reader_count || info->is_writing)
-    pthread_cond_wait(&info->write_ready, &info->reader_count_mutex);
-
-  info->is_writing = 1;
-
-  pthread_mutex_unlock(&info->reader_count_mutex);
-
-  assert(!info->reader_count);
+  pthread_rwlock_wrlock(&info->rw_lock);
 #endif
 }
 
@@ -158,21 +127,9 @@ static void
 JPT_writer_leave(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
-  assert(info->is_writing);
-  info->is_writing = 0;
   pthread_mutex_unlock(&global_lock);
 #else
-  assert(!info->reader_count);
-  assert(info->is_writing);
-
-  pthread_mutex_lock(&info->reader_count_mutex);
-
-  info->is_writing = 0;
-
-  pthread_cond_signal(&info->write_ready);
-  pthread_cond_broadcast(&info->read_ready);
-
-  pthread_mutex_unlock(&info->reader_count_mutex);
+  pthread_rwlock_unlock(&info->rw_lock);
 #endif
 }
 
@@ -204,7 +161,6 @@ JPT_log_append_uint(struct JPT_info* info, unsigned int value)
 {
   unsigned char* output = &info->logbuf[info->logbuf_fill];
 
-  assert(info->is_writing);
   assert(info->logbuf_fill <= sizeof(info->logbuf) - 5);
 
   if(value > 0xfffffff)
@@ -306,8 +262,6 @@ JPT_get_column_idx(struct JPT_info* info, const char* column, int flags)
   char* new_name;
   char* old_name;
   char prefix[COLUMN_PREFIX_SIZE + 1];
-
-  assert(info->is_writing || info->reader_count);
 
   if(column[0] == '_' && column[1] == '_')
   {
@@ -482,8 +436,6 @@ JPT_node_key_callback(unsigned int idx, void* arg)
 void
 JPT_update_map(struct JPT_info* info)
 {
-  assert(info->is_writing || info->reader_count);
-
   info->file_size = lseek64(info->fd, 0, SEEK_END);
 
   if(!info->file_size)
@@ -608,13 +560,11 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
   free(logname);
 
-  pthread_mutex_init(&info->reader_count_mutex, 0);
-  pthread_cond_init(&info->write_ready, 0);
-  pthread_cond_init(&info->read_ready, 0);
+  pthread_rwlock_init(&info->rw_lock, 0);
   pthread_mutex_init(&info->column_hash_mutex, 0);
   pthread_mutex_init(&info->memtable_mutex, 0);
 
-  info->is_writing = 1;
+  JPT_writer_enter(info);
 
   JPT_update_map(info);
 
@@ -775,7 +725,7 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   if(-1 == JPT_log_replay(info))
     goto fail;
 
-  info->is_writing = 0;
+  JPT_writer_leave(info);
 
   return info;
 
@@ -796,8 +746,6 @@ static void
 JPT_free_disktables(struct JPT_info* info)
 {
   struct JPT_disktable* dt;
-
-  assert(info->is_writing || info->reader_count);
 
   dt = info->first_disktable;
 
@@ -828,8 +776,6 @@ JPT_compact(struct JPT_info* info)
   jmp_buf io_error;
   off_t old_eof;
 
-  assert(info->is_writing && !info->reader_count);
-
   if(!info->memtable_key_count)
     return JPT_log_reset(info);
 
@@ -837,7 +783,7 @@ JPT_compact(struct JPT_info* info)
   nodes = malloc(sizeof(struct JPT_node*) * info->node_count);
   iterator = nodes;
 
-  JPT_memtable_list_all(info->root, &iterator);
+  JPT_memtable_list_all(info, &iterator);
 
   pat = patricia_create(JPT_node_key_callback, nodes);
 
@@ -1437,8 +1383,6 @@ JPT_insert(struct JPT_info* info,
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
   int written = 0;
 
-  assert(info->is_writing && !info->reader_count);
-
   if(row_size + COLUMN_PREFIX_SIZE - 1 > PATRICIA_MAX_KEYLENGTH)
   {
     errno = EINVAL;
@@ -1597,8 +1541,6 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
   uint32_t columnidx;
   int found = 0;
-
-  assert(info->is_writing && !info->reader_count);
 
   columnidx = JPT_get_column_idx(info, column, 0);
 
@@ -1892,7 +1834,6 @@ JPT_log_begin(struct JPT_info* info)
 {
   assert(!info->logbuf_fill);
   assert(!info->replaying);
-  assert(info->is_writing && !info->reader_count);
 
   if(!info->logfile_empty)
   {
@@ -1998,7 +1939,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
     nodes = malloc(sizeof(struct JPT_node*) * info->node_count);
     iterator = nodes;
 
-    JPT_memtable_list_column(info->root, &iterator, columnidx);
+    JPT_memtable_list_column(info, &iterator, columnidx);
 
     if(iterator != nodes)
     {
@@ -2307,11 +2248,7 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
     dt = dt->next;
   }
 
-  pthread_mutex_lock(&info->memtable_mutex);
-
   result = JPT_memtable_has_key(info, row, columnidx);
-
-  pthread_mutex_unlock(&info->memtable_mutex);
 
   JPT_reader_leave(info);
 
@@ -2344,8 +2281,6 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
   char* key;
   int res = -1;
   /* XXX: Improve error handling */
-
-  assert(info->is_writing || info->reader_count);
 
   key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
 
@@ -2381,12 +2316,8 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
     d = d->next;
   }
 
-  pthread_mutex_lock(&info->memtable_mutex);
-
   if(0 == JPT_memtable_get(info, row, columnidx, value, value_size, skip, max_read, timestamp))
     res = 0;
-
-  pthread_mutex_unlock(&info->memtable_mutex);
 
   if(res == -1)
     errno = ENOENT;
@@ -2494,11 +2425,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
     nodes = malloc(sizeof(struct JPT_node*) * info->node_count);
     iterator = nodes;
 
-    pthread_mutex_lock(&info->memtable_mutex);
-
-    JPT_memtable_list_all(info->root, &iterator);
-
-    pthread_mutex_unlock(&info->memtable_mutex);
+    JPT_memtable_list_all(info, &iterator);
 
     nodes_end = iterator;
     iterator = nodes;
@@ -2774,14 +2701,11 @@ restart:
 
   if(info->root)
   {
+    /* XXX: Allocates nodes for all values, not just one column */
     nodes = malloc(sizeof(struct JPT_node*) * info->node_count);
     iterator = nodes;
 
-    pthread_mutex_lock(&info->memtable_mutex);
-
-    JPT_memtable_list_column(info->root, &iterator, columnidx);
-
-    pthread_mutex_unlock(&info->memtable_mutex);
+    JPT_memtable_list_column(info, &iterator, columnidx);
 
     nodes_end = iterator;
     iterator = nodes;
@@ -2889,8 +2813,6 @@ restart:
     if(disktable_count != info->disktable_count
     || major_compact_count != info->major_compact_count)
     {
-      assert(!info->is_writing && info->reader_count);
-
       if(!start_row)
         start_row = strdup(last_row);
 

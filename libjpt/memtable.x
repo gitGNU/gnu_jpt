@@ -37,6 +37,9 @@ deep zig-zag tree to cause a stack overflow.
 @< Functions @>=
 
   static void
+  JPT_memtable_list_all_right(struct JPT_node* n, struct JPT_node*** nodes);
+
+  static void
   JPT_memtable_list_all_left(struct JPT_node* n, struct JPT_node*** nodes)
   {
     struct JPT_node* top = n->parent;
@@ -49,14 +52,14 @@ deep zig-zag tree to cause a stack overflow.
       @< Add current node to result list, if not removed @>
 
       if(n->right)
-        JPT_memtable_list_all(n->right, nodes);
+        JPT_memtable_list_all_right(n->right, nodes);
 
       n = n->parent;
     }
   }
 
-  void
-  JPT_memtable_list_all(struct JPT_node* n, struct JPT_node*** nodes)
+  static void
+  JPT_memtable_list_all_right(struct JPT_node* n, struct JPT_node*** nodes)
   {
     while(n)
     {
@@ -69,10 +72,25 @@ deep zig-zag tree to cause a stack overflow.
     }
   }
 
+  void
+  JPT_memtable_list_all(struct JPT_info* info, struct JPT_node*** nodes)
+  {
+    pthread_mutex_lock(&info->memtable_mutex);
+
+    if(info->root)
+      JPT_memtable_list_all_left(info->root, nodes);
+
+    pthread_mutex_unlock(&info->memtable_mutex);
+  }
+
 @ These functions work like the "list all" functions, except they filter for a
 given column index.
 
 @< Functions @>=
+
+  static void
+  JPT_memtable_list_column_right(struct JPT_node* n, struct JPT_node*** nodes,
+                                 uint32_t columnidx);
 
   static void
   JPT_memtable_list_column_left(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx)
@@ -87,14 +105,14 @@ given column index.
       @< Add current node to result list, if correct column and not removed @>
 
       if(n->right)
-        JPT_memtable_list_column(n->right, nodes, columnidx);
+        JPT_memtable_list_column_right(n->right, nodes, columnidx);
 
       n = n->parent;
     }
   }
 
-  void
-  JPT_memtable_list_column(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx)
+  static void
+  JPT_memtable_list_column_right(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx)
   {
     while(n)
     {
@@ -108,6 +126,17 @@ given column index.
 
       n = n->right;
     }
+  }
+
+  void
+  JPT_memtable_list_column(struct JPT_info* info, struct JPT_node*** nodes, uint32_t columnidx)
+  {
+    pthread_mutex_lock(&info->memtable_mutex);
+
+    if(info->root)
+      JPT_memtable_list_column_left(info->root, nodes, columnidx);
+
+    pthread_mutex_unlock(&info->memtable_mutex);
   }
 
 @ When a value is removed from the tree, its value is set to |(void*) -1|.
@@ -166,10 +195,12 @@ search key.
   int
   JPT_memtable_has_key(struct JPT_info* info, const char* row, uint32_t columnidx)
   {
-    struct JPT_node* n = info->root;
+    struct JPT_node* n;
     int cmp;
 
-    assert(info->is_writing || 0 != pthread_mutex_trylock(&info->memtable_mutex));
+    pthread_mutex_lock(&info->memtable_mutex);
+
+    n = info->root;
 
     while(n)
     {
@@ -177,9 +208,6 @@ search key.
 
       @< Left branch: @>
       {
-        if(!n->left)
-          return -1;
-
         n = n->left;
 
         continue;
@@ -187,9 +215,6 @@ search key.
 
       @< Right branch: @>
       {
-        if(!n->right)
-          return -1;
-
         n = n->right;
 
         continue;
@@ -198,10 +223,14 @@ search key.
       JPT_memtable_splay(info, n);
 
       if(n->data.value == (void*) -1)
-        return -1;
+        break;
+
+      pthread_mutex_unlock(&info->memtable_mutex);
 
       return 0;
     }
+
+    pthread_mutex_unlock(&info->memtable_mutex);
 
     return -1;
   }
@@ -216,10 +245,12 @@ appends the associated value to the pointers passed as parameters.
                    void** value, size_t* value_size, size_t* skip, size_t* max_read,
                    uint64_t* timestamp)
   {
-    struct JPT_node* n = info->root;
+    struct JPT_node* n;
     int cmp;
 
-    assert(info->is_writing || 0 != pthread_mutex_trylock(&info->memtable_mutex));
+    pthread_mutex_lock(&info->memtable_mutex);
+
+    n = info->root;
 
     while(n)
     {
@@ -230,9 +261,6 @@ appends the associated value to the pointers passed as parameters.
 
       @< Left branch: @>
       {
-        if(!n->left)
-          return -1;
-
         n = n->left;
 
         continue;
@@ -240,9 +268,6 @@ appends the associated value to the pointers passed as parameters.
 
       @< Right branch: @>
       {
-        if(!n->right)
-          return -1;
-
         n = n->right;
 
         continue;
@@ -250,8 +275,12 @@ appends the associated value to the pointers passed as parameters.
 
       @< Read value at current node @>
 
+      pthread_mutex_unlock(&info->memtable_mutex);
+
       return 0;
     }
+
+    pthread_mutex_unlock(&info->memtable_mutex);
 
     return -1;
   }
@@ -262,7 +291,7 @@ a sort of tombstone.
 @< Read value at current node @>=
 
   if(n->data.value == (void*) -1)
-    return -1;
+    break;
 
   i = *value_size;
 
@@ -351,10 +380,6 @@ balanced.
   void
   JPT_memtable_splay(struct JPT_info* info, struct JPT_node* n)
   {
-    assert(info->is_writing
-           || (info->reader_count
-               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
-
     while(n->parent)
     {
       struct JPT_node* parent = n->parent;
@@ -518,10 +543,6 @@ allocations are word aligned.
   {
     void* result;
 
-    assert(info->is_writing
-           || (info->reader_count
-               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
-
     if(!info->buffer)
     {
       info->buffer = malloc(info->buffer_size);
@@ -562,10 +583,6 @@ than our buffer size.
                            int will_compact)
   {
     struct JPT_node* result;
-
-    assert(info->is_writing
-           || (info->reader_count
-               && 0 != pthread_mutex_trylock(&info->memtable_mutex)));
 
     result = JPT_memtable_buffer_alloc(info, sizeof(struct JPT_node));
     result->row = JPT_memtable_buffer_alloc(info, strlen(row) + 1);
@@ -611,8 +628,6 @@ JPT_memtable_insert(struct JPT_info* info, const char* row, uint32_t columnidx,
   size_t row_size = strlen(row) + 1;
   int must_compact = 0;
   int cmp;
-
-  assert(info->is_writing);
 
   @< Calculate needed space, compact or schedule compact if necessary @>
   @< Handle insertion into an empty tree (creating the root node) @>
@@ -899,8 +914,6 @@ int
 JPT_memtable_remove(struct JPT_info* info, const char* row, uint32_t columnidx)
 {
   struct JPT_node* n;
-
-  assert(info->is_writing);
 
   n = info->root;
 

@@ -126,16 +126,11 @@ struct JPT_info
 #if GLOBAL_LOCKS
   pthread_mutex_t global_lock;
 #else
-  pthread_mutex_t reader_count_mutex;
-  pthread_cond_t read_ready;
-  pthread_cond_t write_ready;
+  pthread_rwlock_t rw_lock;
 #endif
 
   pthread_mutex_t column_hash_mutex;
   pthread_mutex_t memtable_mutex;
-
-  size_t reader_count;
-  int is_writing;
 
   size_t major_compact_count;
 };
@@ -197,10 +192,10 @@ JPT_memtable_get(struct JPT_info* info, const char* row, uint32_t columnidx,
                  uint64_t* timestamp);
 
 void
-JPT_memtable_list_all(struct JPT_node* n, struct JPT_node*** nodes);
+JPT_memtable_list_all(struct JPT_info* info, struct JPT_node*** nodes);
 
 void
-JPT_memtable_list_column(struct JPT_node* n, struct JPT_node*** nodes, uint32_t columnidx);
+JPT_memtable_list_column(struct JPT_info* info, struct JPT_node*** nodes, uint32_t columnidx);
 
 int
 JPT_memtable_remove(struct JPT_info* info, const char* row, uint32_t columnidx);
