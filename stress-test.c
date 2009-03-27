@@ -117,6 +117,9 @@ static int done;
 static void
 sighandler(int signal)
 {
+  if(done)
+    exit(EXIT_SUCCESS);
+
   done = 1;
 }
 
@@ -414,7 +417,7 @@ main(int argc, char** argv)
   WANT_TRUE(0 == unlink("test-db.tab") || errno == ENOENT);
   WANT_TRUE(0 == unlink("test-db.tab.log") || errno == ENOENT);
 
-  WANT_POINTER(db = jpt_init("test-db.tab", 1024 * 1024, 0));
+  WANT_POINTER(db = jpt_init("test-db.tab", 128 * 1024, 0));
 
   if(!db)
     return EXIT_FAILURE;
