@@ -722,6 +722,8 @@ done:
 
       return -1;
     }
+    else if(flags & JPT_REPLACE)
+      JPT_memtable_remove(info, row, columnidx);
 
     if(-1 == JPT_compact(info))
       return -1;
@@ -738,12 +740,17 @@ done:
 
   if(!info->root)
   {
+    assert(!info->node_count);
+    assert(!info->memtable_key_count);
+    assert(!info->memtable_key_size);
+    assert(!info->memtable_value_size);
+
     info->root = JPT_memtable_create_node(info, row, columnidx, value, value_size, must_compact);
     info->root->timestamp = *timestamp;
-    ++info->node_count;
-    ++info->memtable_key_count;
-    info->memtable_key_size += strlen(row) + 1;
-    info->memtable_value_size += value_size;
+    info->node_count = 1;
+    info->memtable_key_count = 1;
+    info->memtable_key_size = strlen(row) + 1;
+    info->memtable_value_size = value_size;
 
     goto done;
   }
