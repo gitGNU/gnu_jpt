@@ -220,7 +220,7 @@ main(int argc, char** argv)
   }
   else if(!strcmp(argv[optind + 1], "update"))
   {
-    char line[4096];
+    char line[256];
     size_t lineno = 0;
 
     init_table(argv[optind]);
