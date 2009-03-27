@@ -425,7 +425,7 @@ JPT_get_column_name(struct JPT_info* info, uint32_t columnidx)
   char prefix[COLUMN_PREFIX_SIZE + 1];
   size_t result_size;
 
-  assert(info->is_writing || info->reader_count);
+  assert(info->is_writing || (info->reader_count && 0 != pthread_mutex_trylock(&info->column_hash_mutex)));
 
   if(columnidx == last)
     return result;
@@ -1578,6 +1578,8 @@ jpt_insert_timestamp(struct JPT_info* info,
     if(info->flags & JPT_SYNC)
       fdatasync(info->logfd);
   }
+  else if(res == 1)
+    res = 0;
 
   JPT_writer_leave(info);
 
@@ -1644,7 +1646,7 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 static int
 JPT_log_replay(struct JPT_info* info)
 {
-  long size;
+  off_t size;
   uint64_t old_size;
   char* row = 0;
   char* col = 0;
@@ -1671,7 +1673,8 @@ JPT_log_replay(struct JPT_info* info)
   if(size < sizeof(uint64_t))
     goto truncate;
 
-  read(info->logfd, &old_size, sizeof(old_size));
+  if(-1 == JPT_read_all(info->logfd, &old_size, sizeof(old_size)))
+    return -1;
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
   old_size = ((old_size & 0xff00000000000000ULL) >> 56)
@@ -1883,7 +1886,7 @@ static int
 JPT_log_begin(struct JPT_info* info)
 {
   assert(!info->logbuf_fill);
-  assert(info->is_writing);
+  assert(info->is_writing && !info->reader_count);
 
   if(!info->logfile_empty)
   {
@@ -2118,10 +2121,10 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
 
   free(cursor.buffer);
 
-  if(-1 == JPT_remove(info, column, "__COLUMNS__"))
+  if(-1 == JPT_remove(info, column, "__COLUMNS__") && errno != ENOENT)
     return -1;
 
-  if(-1 == JPT_remove(info, prefix, "__REV_COLUMNS__"))
+  if(-1 == JPT_remove(info, prefix, "__REV_COLUMNS__") && errno != ENOENT)
     return -1;
 
   hash = 0;
@@ -2462,6 +2465,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
   struct JPT_node** nodes_end = 0;
   struct JPT_disktable* dt;
   struct JPT_disktable_cursor* cursors;
+  const char* column_name;
   char* cat_buffer = 0;
   size_t cat_buffer_size = 0;
   size_t i;
@@ -2633,14 +2637,29 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
         ++iterator;
       }
 
-      res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE, JPT_get_column_name(info, mincol), cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
+      pthread_mutex_lock(&info->column_hash_mutex);
+
+      column_name = JPT_get_column_name(info, mincol);
+
+      assert(column_name);
+
+      res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE, column_name,
+                     cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
+
+      pthread_mutex_unlock(&info->column_hash_mutex);
     }
     else
     {
+      pthread_mutex_lock(&info->column_hash_mutex);
+
+      column_name = JPT_get_column_name(info, mincol);
+
+      assert(column_name);
+
       if(minidx != (uint32_t) ~0)
       {
         res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE,
-                       JPT_get_column_name(info, mincol),
+                       column_name,
                        cursors[minidx].data + cursors[minidx].keylen,
                        cursors[minidx].data_size - cursors[minidx].keylen,
                        &cursors[minidx].timestamp, arg);
@@ -2649,12 +2668,14 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
       }
       else
       {
-        res = callback((*iterator)->row, JPT_get_column_name(info, mincol),
+        res = callback((*iterator)->row, column_name,
                        (*iterator)->data.value, (*iterator)->data.value_size,
                        &(*iterator)->timestamp, arg);
 
         ++iterator;
       }
+
+      pthread_mutex_unlock(&info->column_hash_mutex);
     }
 
     switch(res)
@@ -2843,6 +2864,8 @@ restart:
     if(disktable_count != info->disktable_count
     || major_compact_count != info->major_compact_count)
     {
+      assert(!info->is_writing && info->reader_count);
+
       if(!start_row)
         start_row = strdup(last_row);
 
@@ -3025,8 +3048,6 @@ restart:
         row = cat_buffer + equal_size;
         strcpy(row, cursors[minidx].data + COLUMN_PREFIX_SIZE);
 
-        JPT_reader_leave(info);
-
         if(start_row)
         {
           if(0 > strcmp(start_row, row))
@@ -3035,14 +3056,19 @@ restart:
 
             start_row = 0;
           }
+          else
+          {
+            cursors[minidx].data_size = 0;
+
+            continue;
+          }
         }
 
-        if(!start_row)
-        {
-          res = callback(last_row = row, column, cat_buffer,
-                         cursors[minidx].data_size - cursors[minidx].keylen,
-                         &cursors[minidx].timestamp, arg);
-        }
+        JPT_reader_leave(info);
+
+        res = callback(last_row = row, column, cat_buffer,
+                       cursors[minidx].data_size - cursors[minidx].keylen,
+                       &cursors[minidx].timestamp, arg);
 
         JPT_reader_enter(info);
 
@@ -3061,8 +3087,6 @@ restart:
 
         row = cat_buffer + size;
 
-        JPT_reader_leave(info);
-
         if(start_row)
         {
           if(0 > strcmp(start_row, row))
@@ -3071,10 +3095,17 @@ restart:
 
             start_row = 0;
           }
+          else
+          {
+            ++iterator;
+
+            continue;
+          }
         }
 
-        if(!start_row)
-          res = callback(last_row = row, column, cat_buffer, size, &timestamp, arg);
+        JPT_reader_leave(info);
+
+        res = callback(last_row = row, column, cat_buffer, size, &timestamp, arg);
 
         JPT_reader_enter(info);
 
