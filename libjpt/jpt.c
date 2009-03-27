@@ -40,6 +40,8 @@
 #define JPT_SIGNATURE     "LBAT"
 #define JPT_VERSION       9
 
+#define GLOBAL_LOCKS 0
+
 /* #define TRACE(x) fprintf x ; fflush(stderr); */
 
 #ifndef TRACE
@@ -87,8 +89,6 @@ jpt_gettime()
 __thread int JPT_errno = 0;
 __thread char* JPT_last_error = 0;
 
-#define GLOBAL_LOCKS 0
-
 #if GLOBAL_LOCKS
 static pthread_mutex_t global_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
@@ -117,6 +117,7 @@ static void
 JPT_reader_leave(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
+  assert(info->reader_count);
   info->reader_count = 0;
   pthread_mutex_unlock(&global_lock);
 #else
@@ -157,6 +158,7 @@ static void
 JPT_writer_leave(struct JPT_info* info)
 {
 #if GLOBAL_LOCKS
+  assert(info->is_writing);
   info->is_writing = 0;
   pthread_mutex_unlock(&global_lock);
 #else
@@ -420,15 +422,9 @@ static const char*
 JPT_get_column_name(struct JPT_info* info, uint32_t columnidx)
 {
   static __thread char* result = 0;
-  static __thread uint32_t last = (uint32_t) ~0;
 
   char prefix[COLUMN_PREFIX_SIZE + 1];
   size_t result_size;
-
-  assert(info->is_writing || (info->reader_count && 0 != pthread_mutex_trylock(&info->column_hash_mutex)));
-
-  if(columnidx == last)
-    return result;
 
   if(columnidx < 100)
   {
@@ -440,8 +436,6 @@ JPT_get_column_name(struct JPT_info* info, uint32_t columnidx)
     case 3: return "__COUNTERS__";
     }
   }
-
-  last = columnidx;
 
   free(result);
   result = 0;
@@ -775,12 +769,8 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
   info->columns = malloc(info->column_count * sizeof(struct JPT_column));
   memset(info->columns, 0, info->column_count * sizeof(struct JPT_column));
 
-  info->is_writing = 0;
-
-  if(sizeof(uint32_t) != jpt_get_fixed(info, "next-column", "__META__", &info->next_column, sizeof(uint32_t)))
+  if(sizeof(uint32_t) != JPT_get_fixed(info, "next-column", "__META__", &info->next_column, sizeof(uint32_t)))
     info->next_column = 100;
-
-  info->is_writing = 1;
 
   if(-1 == JPT_log_replay(info))
     goto fail;
@@ -927,10 +917,10 @@ JPT_compact(struct JPT_info* info)
     return -1;
   }
 
-#if IOV_MAX < 1024
+#if IOV_MAX < 16
 #  define IOV_SIZE IOV_MAX
 #else
-#  define IOV_SIZE 1024
+#  define IOV_SIZE 16
 #endif
 
   struct iovec iov[IOV_SIZE];
@@ -1157,7 +1147,6 @@ jpt_major_compact(struct JPT_info* info)
     return 0;
   }
 
-
   newname = alloca(strlen(info->filename) + 8);
   strcpy(newname, info->filename);
   strcat(newname, ".XXXXXX");
@@ -1187,6 +1176,8 @@ jpt_major_compact(struct JPT_info* info)
   {
     asprintf(&JPT_last_error, "malloc failed while allocating %zu bytes", sizeof(struct JPT_key_info) * row_count);
 
+    JPT_writer_leave(info);
+
     return -1;
   }
 
@@ -1197,6 +1188,8 @@ jpt_major_compact(struct JPT_info* info)
     asprintf(&JPT_last_error, "malloc failed while allocating %zu bytes", sizeof(struct JPT_key_info) * row_count);
 
     free(row_names);
+
+    JPT_writer_leave(info);
 
     return -1;
   }
@@ -1950,7 +1943,7 @@ jpt_remove(struct JPT_info* info, const char* row, const char* column)
 
     if(-1 == JPT_log_begin(info))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -1967,7 +1960,7 @@ jpt_remove(struct JPT_info* info, const char* row, const char* column)
 
     if(-1 == JPT_writev(info->logfd, iov, 3))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -2193,7 +2186,7 @@ jpt_remove_column(struct JPT_info* info, const char* column, int flags)
 
     if(-1 == JPT_log_begin(info))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -2209,7 +2202,7 @@ jpt_remove_column(struct JPT_info* info, const char* column, int flags)
 
     if(-1 == JPT_writev(info->logfd, iov, 2))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -2242,7 +2235,7 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
 
     if(-1 == JPT_log_begin(info))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -2258,7 +2251,7 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
 
     if(-1 == JPT_writev(info->logfd, iov, 2))
     {
-      JPT_writer_enter(info);
+      JPT_writer_leave(info);
 
       return -1;
     }
@@ -2328,18 +2321,16 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
 int
 jpt_has_column(struct JPT_info* info, const char* column)
 {
+  int result = 0;
+
   JPT_reader_enter(info);
 
   if(JPT_get_column_idx(info, column, 0) == (uint32_t) ~0)
-  {
-    JPT_reader_leave(info);
-
-    return -1;
-  }
+    result = -1;
 
   JPT_reader_leave(info);
 
-  return 0;
+  return result;
 }
 
 static int
@@ -2450,24 +2441,31 @@ jpt_get_timestamp(struct JPT_info* info,
 }
 
 int
-jpt_get_fixed(struct JPT_info* info, const char* row, const char* column,
+JPT_get_fixed(struct JPT_info* info, const char* row, const char* column,
               void* value, size_t value_size)
 {
   size_t size;
   size_t max_read = value_size;
 
+  if(-1 == JPT_get(info, row, column, &value, &size, 0, &max_read, 0))
+    return -1;
+
+  return size;
+}
+
+int
+jpt_get_fixed(struct JPT_info* info, const char* row, const char* column,
+              void* value, size_t value_size)
+{
+  int result;
+
   JPT_reader_enter(info);
 
-  if(-1 == JPT_get(info, row, column, &value, &size, 0, &max_read, 0))
-  {
-    JPT_reader_leave(info);
-
-    return -1;
-  }
+  result = JPT_get_fixed(info, row, column, value, value_size);
 
   JPT_reader_leave(info);
 
-  return size;
+  return result;
 }
 
 int
@@ -2479,6 +2477,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
   struct JPT_disktable* dt;
   struct JPT_disktable_cursor* cursors;
   const char* column_name;
+  uint32_t last_column = (uint32_t) -1;
   char* cat_buffer = 0;
   size_t cat_buffer_size = 0;
   size_t i;
@@ -2523,15 +2522,24 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
   {
     for(i = 0; i < info->disktable_count; ++i)
     {
+      size_t key_count;
+
       assert(cursors[i].disktable);
 
-      while(!cursors[i].data_size && cursors[i].offset < cursors[i].disktable->key_info_count)
+      key_count = cursors[i].disktable->key_info_count;
+
+      while(cursors[i].offset < key_count && !cursors[i].data_size)
       {
         if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], (size_t) -1))
           goto fail;
 
         if(cursors[i].columnidx < 100)
           cursors[i].data_size = 0;
+        else
+        {
+          assert(cursors[i].offset == cursors[i].disktable->key_info_count
+                 || cursors[i].data_size >= cursors[i].keylen);
+        }
       }
     }
 
@@ -2617,7 +2625,7 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
     if(!minrow)
       break;
 
-    assert(mincol >= 100);
+    assert(mincol >= 100 && mincol < info->next_column);
 
     if(equal_count > 1)
     {
@@ -2635,6 +2643,8 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
       {
         if(i == minidx || (!strcmp(cursors[i].data + COLUMN_PREFIX_SIZE, minrow) && cursors[i].columnidx == mincol))
         {
+          assert(cursors[i].data_size >= cursors[i].keylen);
+
           memcpy(o, cursors[i].data + cursors[i].keylen, cursors[i].data_size - cursors[i].keylen);
           o += cursors[i].data_size - cursors[i].keylen;
           cursors[i].data_size = 0;
@@ -2652,27 +2662,29 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
         ++iterator;
       }
 
-      pthread_mutex_lock(&info->column_hash_mutex);
-
-      column_name = JPT_get_column_name(info, mincol);
-
-      assert(column_name);
+      if(mincol != last_column)
+      {
+        column_name = JPT_get_column_name(info, mincol);
+        assert(column_name);
+        last_column = mincol;
+      }
 
       res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE, column_name,
                      cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
-
-      pthread_mutex_unlock(&info->column_hash_mutex);
     }
     else
     {
-      pthread_mutex_lock(&info->column_hash_mutex);
-
-      column_name = JPT_get_column_name(info, mincol);
-
-      assert(column_name);
+      if(mincol != last_column)
+      {
+        column_name = JPT_get_column_name(info, mincol);
+        assert(column_name);
+        last_column = mincol;
+      }
 
       if(minidx != (uint32_t) ~0)
       {
+        assert(minidx < info->disktable_count);
+
         res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE,
                        column_name,
                        cursors[minidx].data + cursors[minidx].keylen,
@@ -2689,8 +2701,6 @@ jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
 
         ++iterator;
       }
-
-      pthread_mutex_unlock(&info->column_hash_mutex);
     }
 
     switch(res)
@@ -2737,7 +2747,7 @@ jpt_column_scan(struct JPT_info* info, const char* column,
   char prefix[COLUMN_PREFIX_SIZE + 1];
   size_t major_compact_count, disktable_count;
 
-  TRACE((stderr, "jpt_column_scan(%p, %s, %p, %p)\n", info, column, callback, arg));
+  TRACE((stderr, "jpt_column_scan(%p, \"%s\", %p, %p)\n", info, column, callback, arg));
 
   JPT_clear_error();
 
@@ -3038,8 +3048,6 @@ restart:
       row = o;
       strcpy(row, cursors[minidx].data + COLUMN_PREFIX_SIZE);
 
-      JPT_reader_leave(info);
-
       if(start_row)
       {
         if(0 > strcmp(start_row, row))
@@ -3048,10 +3056,14 @@ restart:
 
           start_row = 0;
         }
+        else
+          continue;
       }
 
-      if(!start_row)
-        res = callback(last_row = row, column, cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
+
+      JPT_reader_leave(info);
+
+      res = callback(last_row = row, column, cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
 
       JPT_reader_enter(info);
     }
@@ -3213,4 +3225,8 @@ jpt_close(struct JPT_info* info)
   free(info->buffer);
   free(info->filename);
   free(info);
+
+#if GLOBAL_LOCKS
+  pthread_mutex_unlock(&global_lock);
+#endif
 }

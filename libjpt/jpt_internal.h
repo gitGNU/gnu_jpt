@@ -123,14 +123,19 @@ struct JPT_info
   struct JPT_disktable* last_disktable;
   size_t disktable_count;
 
+#if GLOBAL_LOCKS
+  pthread_mutex_t global_lock;
+#else
   pthread_mutex_t reader_count_mutex;
   pthread_cond_t read_ready;
   pthread_cond_t write_ready;
-  size_t reader_count;
-  int is_writing;
+#endif
 
   pthread_mutex_t column_hash_mutex;
   pthread_mutex_t memtable_mutex;
+
+  size_t reader_count;
+  int is_writing;
 
   size_t major_compact_count;
 };
@@ -236,6 +241,10 @@ JPT_disktable_cursor_remap(struct JPT_info* info,
 
 int
 JPT_compact(struct JPT_info* info);
+
+int
+JPT_get_fixed(struct JPT_info* info, const char* row, const char* column,
+              void* value, size_t value_size);
 
 void
 JPT_generate_key(char* target, const char* row, uint32_t columnidx);
