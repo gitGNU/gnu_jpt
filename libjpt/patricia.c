@@ -176,24 +176,6 @@ unsigned int patricia_lookup(const struct patricia* pat, const char* key)
   return next - pat->nodes - 1;
 }
 
-static void scan_subtree(const struct patricia* pat,
-                         const struct pat_node* node,
-                         const struct pat_node* next,
-                         unsigned int** results, unsigned int* result_count)
-{
-  while(node->bitidx < next->bitidx)
-  {
-    scan_subtree(pat, next, pat->nodes + next->left, results, result_count);
-
-    node = next;
-    next = pat->nodes + next->right;
-  }
-
-  ++*result_count;
-  *results = realloc(*results, sizeof(unsigned int) * *result_count);
-  (*results)[*result_count - 1] = next - pat->nodes - 1;
-}
-
 unsigned int patricia_lookup_prefix(const struct patricia* pat, const char* prefix)
 {
   const struct pat_node* node = pat->nodes;
