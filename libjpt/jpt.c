@@ -54,6 +54,9 @@ static int
 JPT_log_reset(struct JPT_info* info);
 
 static int
+JPT_log_truncate_table(struct JPT_info* info);
+
+static int
 JPT_log_replay(struct JPT_info* info);
 
 static int
@@ -406,6 +409,9 @@ JPT_node_key_callback(unsigned int idx, void* arg)
 void
 JPT_update_map(struct JPT_info* info)
 {
+  struct JPT_disktable* disktable;
+  void* old_map = 0;
+
   info->file_size = lseek64(info->fd, 0, SEEK_END);
 
   if(!info->file_size)
@@ -418,6 +424,7 @@ JPT_update_map(struct JPT_info* info)
   {
     void* new_map;
 
+    old_map = info->map;
     new_map = mremap(info->map, info->map_size, info->file_size, MREMAP_MAYMOVE);
 
     if(new_map != MAP_FAILED)
@@ -441,25 +448,24 @@ JPT_update_map(struct JPT_info* info)
 
   if(info->map_size)
   {
-    struct JPT_disktable* disktable;
-
-    disktable = info->first_disktable;
-
-    while(disktable)
+    if(old_map != info->map)
     {
-      patricia_remap(disktable->pat, info->map + disktable->pat_offset);
-      disktable->pat_mapped = 1;
+      disktable = info->first_disktable;
 
-      disktable->key_infos = (struct JPT_key_info*) (info->map + disktable->key_info_offset);
-      disktable->key_infos_mapped = 1;
+      while(disktable)
+      {
+        patricia_remap(disktable->pat, info->map + disktable->pat_offset);
+        disktable->pat_mapped = 1;
 
-      disktable = disktable->next;
+        disktable->key_infos = (struct JPT_key_info*) (info->map + disktable->key_info_offset);
+        disktable->key_infos_mapped = 1;
+
+        disktable = disktable->next;
+      }
     }
   }
   else
   {
-    struct JPT_disktable* disktable;
-
     disktable = info->first_disktable;
 
     while(disktable)
@@ -530,13 +536,16 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
   free(logname);
 
+  JPT_update_map(info);
+
+  if(-1 == JPT_log_truncate_table(info))
+    goto fail;
+
   pthread_rwlock_init(&info->rw_lock, 0);
+  pthread_rwlock_init(&info->splay_lock, 0);
   pthread_mutex_init(&info->column_hash_mutex, 0);
-  pthread_mutex_init(&info->memtable_mutex, 0);
 
   JPT_writer_enter(info);
-
-  JPT_update_map(info);
 
   lseek64(info->fd, 0, SEEK_SET);
 
@@ -1549,16 +1558,10 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 }
 
 static int
-JPT_log_replay(struct JPT_info* info)
+JPT_log_truncate_table(struct JPT_info* info)
 {
   off_t size;
   uint64_t old_size;
-  char* row = 0;
-  char* col = 0;
-  char* value = 0;
-  int result = -1;
-  off_t last_valid = 0;
-  FILE* input;
 
   size = lseek(info->logfd, 0, SEEK_END);
 
@@ -1568,15 +1571,15 @@ JPT_log_replay(struct JPT_info* info)
   if(-1 == lseek(info->logfd, 0, SEEK_SET))
     return -1;
 
-  if(size == 0)
+  if(size < sizeof(uint64_t))
   {
+    if(size && -1 == ftruncate(info->logfd, 0))
+      return -1;
+
     info->logfile_empty = 1;
 
     return 0;
   }
-
-  if(size < sizeof(uint64_t))
-    goto truncate;
 
   if(-1 == JPT_read_all(info->logfd, &old_size, sizeof(old_size)))
     return -1;
@@ -1604,12 +1607,28 @@ JPT_log_replay(struct JPT_info* info)
   if(size == sizeof(uint64_t))
     return 0;
 
-  if(-1 == ftruncate(info->fd, old_size))
+  if(info->file_size != old_size)
   {
-    asprintf(&JPT_last_error, "ftruncate(fd, %llu) failed during log replay: %s", (unsigned long long) old_size, strerror(errno));
+    if(-1 == ftruncate(info->fd, old_size))
+    {
+      asprintf(&JPT_last_error, "ftruncate(fd, %llu) failed during log replay: %s", (unsigned long long) old_size, strerror(errno));
 
-    return -1;
+      return -1;
+    }
   }
+
+  return 0;
+}
+
+static int
+JPT_log_replay(struct JPT_info* info)
+{
+  int result = -1;
+  char* row = 0;
+  char* col = 0;
+  char* value = 0;
+  off_t last_valid = 0;
+  FILE* input;
 
   input = fdopen(dup(info->logfd), "r+");
 
@@ -1740,8 +1759,6 @@ JPT_log_replay(struct JPT_info* info)
 
     last_valid = ftell(input);
   }
-
-truncate:
 
   assert(info->replaying);
   info->replaying = 0;
