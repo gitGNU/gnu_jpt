@@ -252,7 +252,7 @@ JPT_disktable_overwrite(struct JPT_disktable* disktable,
   size = key_info.size;
   offset = key_info.offset;
 
-  if(size < key_size || (key_info.flags & JPT_KEY_REMOVED))
+  if(size < key_size)
   {
     errno = ENOENT;
 
@@ -301,6 +301,8 @@ JPT_disktable_overwrite(struct JPT_disktable* disktable,
     if(-1 == pwrite64(info->fd, value, size, disktable->offset + offset + key_size))
       return -1;
   }
+
+  key_info.flags &= ~JPT_KEY_REMOVED;
 
   if(-1 == JPT_DISKTABLE_WRITE_KEYINFO(disktable, &key_info, idx))
       return -1;
