@@ -372,36 +372,6 @@ JPT_get_column_idx(struct JPT_info* info, const char* column, int flags)
   return index;
 }
 
-static const char*
-JPT_get_column_name(struct JPT_info* info, uint32_t columnidx)
-{
-  static __thread char* result = 0;
-
-  char prefix[COLUMN_PREFIX_SIZE + 1];
-  size_t result_size;
-
-  if(columnidx < 100)
-  {
-    switch(columnidx)
-    {
-    case 0: return "__META__";
-    case 1: return "__COLUMNS__";
-    case 2: return "__REV_COLUMNS__";
-    case 3: return "__COUNTERS__";
-    }
-  }
-
-  free(result);
-  result = 0;
-
-  JPT_generate_key(prefix, "", columnidx);
-
-  if(-1 == JPT_get(info, prefix, "__REV_COLUMNS__", (void*) &result, &result_size, 0, 0, 0))
-    return 0;
-
-  return result;
-}
-
 void
 JPT_generate_key(char* target, const char* row, uint32_t columnidx)
 {
@@ -2400,260 +2370,6 @@ jpt_get_fixed(struct JPT_info* info, const char* row, const char* column,
 }
 
 int
-jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
-{
-  struct JPT_node** nodes = 0;
-  struct JPT_node** iterator = 0;
-  struct JPT_node** nodes_end = 0;
-  struct JPT_disktable* dt;
-  struct JPT_disktable_cursor* cursors;
-  const char* column_name;
-  uint32_t last_column = (uint32_t) -1;
-  char* cat_buffer = 0;
-  size_t cat_buffer_size = 0;
-  size_t i;
-  int ok = 0, cmp, res;
-
-  JPT_reader_enter(info);
-
-  TRACE((stderr, "jpt_scan(%p, %p, %p)\n", info, callback, arg));
-
-  JPT_clear_error();
-
-  if(info->root)
-  {
-    nodes = malloc(sizeof(struct JPT_node*) * info->node_count);
-    iterator = nodes;
-
-    JPT_memtable_list_all(info, &iterator);
-
-    nodes_end = iterator;
-    iterator = nodes;
-
-    while(iterator != nodes_end && (*iterator)->columnidx < 100)
-      ++iterator;
-  }
-
-  cursors = calloc(info->disktable_count, sizeof(struct JPT_disktable_cursor));
-  i = 0;
-  dt = info->first_disktable;
-
-  while(dt)
-  {
-    cursors[i++].disktable = dt;
-
-    dt = dt->next;
-  }
-
-  for(;;)
-  {
-    for(i = 0; i < info->disktable_count; ++i)
-    {
-      size_t key_count;
-
-      assert(cursors[i].disktable);
-
-      key_count = cursors[i].disktable->key_info_count;
-
-      while(cursors[i].offset < key_count && !cursors[i].data_size)
-      {
-        if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], (size_t) -1))
-          goto fail;
-
-        if(cursors[i].columnidx < 100)
-          cursors[i].data_size = 0;
-        else
-        {
-          assert(cursors[i].offset == cursors[i].disktable->key_info_count
-                 || cursors[i].data_size >= cursors[i].keylen);
-        }
-      }
-    }
-
-    const char* minrow = 0;
-    size_t mincol = 0;
-    size_t minidx = 0;
-
-    /* When the same value exists in several tables, the values are
-     * concatenated before they are returned.
-     */
-    size_t equal_count = 1;
-    size_t equal_size = 0;
-
-    for(i = 0; i < info->disktable_count; ++i)
-    {
-      if(!cursors[i].data_size)
-        continue;
-
-      assert(cursors[i].disktable);
-
-      if(!minrow)
-      {
-        mincol = cursors[i].columnidx;
-        minrow = (char*) cursors[i].data + COLUMN_PREFIX_SIZE;
-        minidx = i;
-        equal_size = cursors[i].data_size - cursors[i].keylen;
-      }
-      else
-      {
-        if(cursors[i].columnidx != mincol)
-          cmp = cursors[i].columnidx - mincol;
-        else
-          cmp = strcmp(cursors[i].data + COLUMN_PREFIX_SIZE, minrow);
-
-        if(cmp < 0)
-        {
-          mincol = cursors[i].columnidx;
-          minrow = (char*) cursors[i].data + COLUMN_PREFIX_SIZE;
-          minidx = i;
-          equal_count = 1;
-          equal_size = cursors[i].data_size - cursors[i].keylen;
-        }
-        else if(cmp == 0)
-        {
-          ++equal_count;
-          equal_size += cursors[i].data_size - cursors[i].keylen;
-        }
-      }
-    }
-
-    if(iterator != nodes_end)
-    {
-      if(!minrow)
-      {
-        mincol = (*iterator)->columnidx;
-        minrow = (*iterator)->row;
-        minidx = (uint32_t) ~0;
-        /* No need to update equal_size since we're last and know count = 1 */
-      }
-      else
-      {
-        if((*iterator)->columnidx != mincol)
-          cmp = (*iterator)->columnidx - mincol;
-        else
-          cmp = strcmp((*iterator)->row, minrow);
-
-        if(cmp < 0)
-        {
-          mincol = (*iterator)->columnidx;
-          minrow = (*iterator)->row;
-          minidx = (uint32_t) ~0;
-          equal_count = 1;
-          /* No need to update equal_size since we're last and know count = 1 */
-        }
-        else if(cmp == 0)
-        {
-          ++equal_count;
-          equal_size += (*iterator)->data.value_size;
-        }
-      }
-    }
-
-    if(!minrow)
-      break;
-
-    assert(mincol >= 100 && mincol < info->next_column);
-
-    if(equal_count > 1)
-    {
-      char* o;
-
-      if(equal_size > cat_buffer_size)
-      {
-        cat_buffer_size = equal_size;
-        cat_buffer = realloc(cat_buffer, cat_buffer_size);
-      }
-
-      o = cat_buffer;
-
-      for(i = 0; i < info->disktable_count && equal_count; ++i)
-      {
-        if(i == minidx || (!strcmp(cursors[i].data + COLUMN_PREFIX_SIZE, minrow) && cursors[i].columnidx == mincol))
-        {
-          assert(cursors[i].data_size >= cursors[i].keylen);
-
-          memcpy(o, cursors[i].data + cursors[i].keylen, cursors[i].data_size - cursors[i].keylen);
-          o += cursors[i].data_size - cursors[i].keylen;
-          cursors[i].data_size = 0;
-          --equal_count;
-        }
-      }
-
-      if(equal_count)
-      {
-        assert(equal_count == 1);
-        assert((*iterator)->columnidx == mincol);
-        assert(!strcmp((*iterator)->row, minrow));
-
-        memcpy(o, (*iterator)->data.value, (*iterator)->data.value_size);
-        ++iterator;
-      }
-
-      if(mincol != last_column)
-      {
-        column_name = JPT_get_column_name(info, mincol);
-        assert(column_name);
-        last_column = mincol;
-      }
-
-      res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE, column_name,
-                     cat_buffer, equal_size, &cursors[minidx].timestamp, arg);
-    }
-    else
-    {
-      if(mincol != last_column)
-      {
-        column_name = JPT_get_column_name(info, mincol);
-        assert(column_name);
-        last_column = mincol;
-      }
-
-      if(minidx != (uint32_t) ~0)
-      {
-        assert(minidx < info->disktable_count);
-
-        res = callback(cursors[minidx].data + COLUMN_PREFIX_SIZE,
-                       column_name,
-                       cursors[minidx].data + cursors[minidx].keylen,
-                       cursors[minidx].data_size - cursors[minidx].keylen,
-                       &cursors[minidx].timestamp, arg);
-
-        cursors[minidx].data_size = 0;
-      }
-      else
-      {
-        res = callback((*iterator)->row, column_name,
-                       (*iterator)->data.value, (*iterator)->data.value_size,
-                       &(*iterator)->timestamp, arg);
-
-        ++iterator;
-      }
-    }
-
-    switch(res)
-    {
-      case 1: ok = 1;
-      case -1: goto fail;
-    }
-  }
-
-  ok = 1;
-
-fail:
-
-  JPT_reader_leave(info);
-
-  for(i = 0; i < info->disktable_count; ++i)
-    free(cursors[i].buffer);
-
-  free(cursors);
-  free(cat_buffer);
-  free(nodes);
-
-  return ok ? 0 : -1;
-}
-
-int
 jpt_column_scan(struct JPT_info* info, const char* column,
                 jpt_cell_callback callback, void* arg)
 {
@@ -2673,10 +2389,6 @@ jpt_column_scan(struct JPT_info* info, const char* column,
   size_t cursor_count = 0;
   char prefix[COLUMN_PREFIX_SIZE + 1];
   size_t major_compact_count, disktable_count;
-
-  TRACE((stderr, "jpt_column_scan(%p, \"%s\", %p, %p)\n", info, column, callback, arg));
-
-  JPT_clear_error();
 
   JPT_reader_enter(info);
 
@@ -3084,6 +2796,39 @@ fail:
   free(start_row);
 
   return ok ? 0 : -1;
+}
+
+struct JPT_scan_args
+{
+  struct JPT_info* info;
+  jpt_cell_callback callback;
+  void* arg;
+};
+
+static int
+JPT_scan_callback(const char* row, const char* column, const void* data, size_t data_size, uint64_t* timestamp, void* arg)
+{
+  struct JPT_scan_args* args = arg;
+
+  if(-1 == jpt_column_scan(args->info, row, args->callback, args->arg))
+    return -1;
+
+  return 0;
+}
+
+int
+jpt_scan(struct JPT_info* info, jpt_cell_callback callback, void* arg)
+{
+  struct JPT_scan_args args;
+  int result;
+
+  args.info = info;
+  args.callback = callback;
+  args.arg = arg;
+
+  result = jpt_column_scan(info, "__COLUMNS__", JPT_scan_callback, &args);
+
+  return result;
 }
 
 uint64_t
