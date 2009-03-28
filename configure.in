@@ -1,4 +1,4 @@
-AC_INIT(jpt,1.0.0)
+AC_INIT(jpt,1.1.0)
 AM_INIT_AUTOMAKE([dist-bzip2])
 
 AC_PROG_CC
@@ -24,7 +24,6 @@ else
   MAYBE_PHP=
 fi
 AC_SUBST([MAYBE_PHP])
-
 
 AC_CONFIG_HEADER([config.h])
 
