@@ -6,7 +6,7 @@ check_PROGRAMS = \
   test-journal-00 \
   test-scan-00
 
-AM_CPPFLAGS = -I../libjpt/
+AM_CPPFLAGS = -I$(srcdir)/../libjpt/
 AM_CFLAGS = -g
 LDADD = ../libjpt.la
 

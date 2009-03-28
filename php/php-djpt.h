@@ -19,7 +19,7 @@ PHP_FUNCTION(djpt_remove);
 PHP_FUNCTION(djpt_has_key);
 PHP_FUNCTION(djpt_get);
 PHP_FUNCTION(djpt_column_scan);
-PHP_FUNCTION(djpt_eval_string);
+PHP_FUNCTION(djpt_eval);
 PHP_FUNCTION(djpt_get_counter);
 
 #define DJPT_VERSION "1.0"
