@@ -7,7 +7,7 @@ noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
 
 SUBDIRS = tests $(MAYBE_PHP)
 
-AM_CFLAGS = -g -Wall -pthread $(GUILE_CFLAGS)
+AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt
 
 jpt_control_SOURCES = jpt-control.c
@@ -24,7 +24,7 @@ libjpt_common_la_SOURCES = \
 	libjpt/patricia.h libjpt/script.c
 
 libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
-libjpt_la_LIBADD = libjpt-common.la $(GUILE_LDFLAGS)
+libjpt_la_LIBADD = libjpt-common.la
 
 libdjpt_common_la_SOURCES = djpt/djpt_common.c 
 libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h

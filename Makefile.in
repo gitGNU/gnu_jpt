@@ -74,8 +74,7 @@ libjpt_common_la_LIBADD =
 am_libjpt_common_la_OBJECTS = backup.lo disktable.lo memtable.lo io.lo \
 	jpt.lo patricia.lo script.lo
 libjpt_common_la_OBJECTS = $(am_libjpt_common_la_OBJECTS)
-am__DEPENDENCIES_1 =
-libjpt_la_DEPENDENCIES = libjpt-common.la $(am__DEPENDENCIES_1)
+libjpt_la_DEPENDENCIES = libjpt-common.la
 am_libjpt_la_OBJECTS =
 libjpt_la_OBJECTS = $(am_libjpt_la_OBJECTS)
 libjpt_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -164,11 +163,6 @@ EXEEXT = @EXEEXT@
 F77 = @F77@
 FFLAGS = @FFLAGS@
 GREP = @GREP@
-GUILE = @GUILE@
-GUILE_CFLAGS = @GUILE_CFLAGS@
-GUILE_CONFIG = @GUILE_CONFIG@
-GUILE_LDFLAGS = @GUILE_LDFLAGS@
-GUILE_TOOLS = @GUILE_TOOLS@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -254,7 +248,7 @@ lib_LTLIBRARIES = libjpt.la libdjpt.la
 include_HEADERS = libjpt/jpt.h djpt/djpt.h
 noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
 SUBDIRS = tests $(MAYBE_PHP)
-AM_CFLAGS = -g -Wall -pthread $(GUILE_CFLAGS)
+AM_CFLAGS = -g -Wall -pthread
 AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt
 jpt_control_SOURCES = jpt-control.c
 jpt_control_LDADD = libjpt.la
@@ -267,7 +261,7 @@ libjpt_common_la_SOURCES = \
 	libjpt/patricia.h libjpt/script.c
 
 libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
-libjpt_la_LIBADD = libjpt-common.la $(GUILE_LDFLAGS)
+libjpt_la_LIBADD = libjpt-common.la
 libdjpt_common_la_SOURCES = djpt/djpt_common.c 
 libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h
 djptd_SOURCES = djpt/djpt_internal.h djpt/djptd.c
