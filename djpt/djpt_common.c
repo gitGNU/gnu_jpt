@@ -9,7 +9,6 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "jptl.h"
 #include "djpt.h"
 #include "djpt_internal.h"
 
@@ -166,7 +165,7 @@ DJPT_column_scan_callback(const char* row, const char* column, const void* data,
 }
 
 static int
-DJPT_eval_callback(struct JPTL_cons* data, void* arg)
+DJPT_eval_callback(struct JPT_cons* data, void* arg)
 {
   struct DJPT_peer* peer = arg;
   struct DJPT_request response;
@@ -611,7 +610,7 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
       {
         struct DJPT_request_eval_string* eval_string = (void*) request;
 
-        if(-1 == jptl_eval_string(peer->db, eval_string->program, DJPT_eval_callback, peer))
+        if(-1 == jpt_eval(peer->db, eval_string->program, DJPT_eval_callback, peer))
         {
           if(-1 == DJPT_write_error(peer))
             goto done;

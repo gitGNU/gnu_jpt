@@ -6,104 +6,103 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "jptl.h"
+#include "jpt.h"
 #include "jpt_internal.h"
 
 #define JPT_POOL_SIZE (64 * 1024)
 #define SKIP_SPACE(p) do { while(isspace(*p)) *p++ = 0; } while(0)
 
-struct JPTL_variable
+struct JPT_variable
 {
   const char* name;
-  struct JPTL_cons* value;
+  struct JPT_cons* value;
 
-  struct JPTL_variable* next;
+  struct JPT_variable* next;
 };
 
-struct JPTL_pool
+struct JPT_pool
 {
   char* data;
   size_t size;
   size_t data_used;
 
-  struct JPTL_pool* next;
+  struct JPT_pool* next;
 };
 
-struct JPTL_context
+struct JPT_context
 {
-  struct JPTL_program* p;
-  struct JPTL_variable* locals;
+  struct JPT_program* p;
+  struct JPT_variable* locals;
 };
 
-struct JPTL_program
+struct JPT_program
 {
-  struct JPTL_cons* head;
+  struct JPT_cons* head;
   char* data;
 
   jmp_buf error_handler;
   char* error;
 
-  struct JPTL_pool* first_pool;
+  struct JPT_pool* first_pool;
 };
 
-static struct JPTL_cons*
-JPTL_display(struct JPT_info* info, struct JPTL_context* c,
-             struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_display(struct JPT_info* info, struct JPT_context* c,
+             struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_eval(struct JPT_info* info, struct JPTL_context* c,
-          struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_eval(struct JPT_info* info, struct JPT_context* c,
+          struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_flatten(struct JPT_info* info, struct JPTL_context* c,
-             struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_flatten(struct JPT_info* info, struct JPT_context* c,
+             struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_filter(struct JPT_info* info, struct JPTL_context* c,
-            struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_filter(struct JPT_info* info, struct JPT_context* c,
+            struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_nintersection(struct JPT_info* info, struct JPTL_context* c,
-                   struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_nintersection(struct JPT_info* info, struct JPT_context* c,
+                   struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_let(struct JPT_info* info, struct JPTL_context* c,
-         struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_let(struct JPT_info* info, struct JPT_context* c,
+         struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
-            struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_lookup(struct JPT_info* info, struct JPT_context* c,
+            struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_lookupf(struct JPT_info* info, struct JPTL_context* c,
-             struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_lookupf(struct JPT_info* info, struct JPT_context* c,
+             struct JPT_cons* cons);
 
-static struct JPTL_cons*
-JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
-          struct JPTL_cons* cons);
+static struct JPT_cons*
+JPT_zipf(struct JPT_info* info, struct JPT_context* c,
+          struct JPT_cons* cons);
 
 static const struct
 {
   const char* name;
-  struct JPTL_cons* (*fun)(struct JPT_info* info, struct JPTL_context* c, struct JPTL_cons* cons);
+  struct JPT_cons* (*fun)(struct JPT_info* info, struct JPT_context* c, struct JPT_cons* cons);
 } functions[] =
 {
-  { "display",       JPTL_display },
-  { "eval",          JPTL_eval },
-  { "flatten",       JPTL_flatten },
-  { "filter",        JPTL_filter },
-  { "nintersection", JPTL_nintersection },
-  { "let",           JPTL_let },
-  { "lookup",        JPTL_lookup },
-  { "lookupf",       JPTL_lookupf },
-  { "zipf",          JPTL_zipf },
+  { "display",       JPT_display },
+  { "eval",          JPT_eval },
+  { "flatten",       JPT_flatten },
+  { "filter",        JPT_filter },
+  { "nintersection", JPT_nintersection },
+  { "let",           JPT_let },
+  { "lookup",        JPT_lookup },
+  { "lookupf",       JPT_lookupf },
+  { "zipf",          JPT_zipf },
 };
 
-
 static void*
-JPTL_alloc(struct JPTL_program* program, size_t size)
+JPT_alloc(struct JPT_program* program, size_t size)
 {
-  struct JPTL_pool* pool;
+  struct JPT_pool* pool;
   void* result;
 
   if(program->first_pool
@@ -113,7 +112,7 @@ JPTL_alloc(struct JPTL_program* program, size_t size)
   }
   else
   {
-    pool = malloc(sizeof(struct JPTL_pool));
+    pool = malloc(sizeof(struct JPT_pool));
     pool->data = malloc(JPT_POOL_SIZE);
     pool->size = JPT_POOL_SIZE;
     pool->data_used = 0;
@@ -129,13 +128,13 @@ JPTL_alloc(struct JPTL_program* program, size_t size)
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_recursive_parse(struct JPTL_program* p, char** pc)
+static struct JPT_cons*
+JPT_recursive_parse(struct JPT_program* p, char** pc)
 {
-  struct JPTL_cons* result;
+  struct JPT_cons* result;
   char* c;
 
-  result = JPTL_alloc(p, sizeof(struct JPTL_cons));
+  result = JPT_alloc(p, sizeof(struct JPT_cons));
   c = *pc;
 
   if(!*c)
@@ -147,7 +146,7 @@ JPTL_recursive_parse(struct JPTL_program* p, char** pc)
   {
     *c++ = 0;
 
-    result->car = JPTL_alloc(p, sizeof(struct JPTL_cons));
+    result->car = JPT_alloc(p, sizeof(struct JPT_cons));
     result->car->car_value.data = "quote";
     result->car->car_value.size = 5;
 
@@ -157,13 +156,13 @@ JPTL_recursive_parse(struct JPTL_program* p, char** pc)
     {
       *c++ = 0;
 
-      result->car->cdr = JPTL_recursive_parse(p, &c);
+      result->car->cdr = JPT_recursive_parse(p, &c);
 
       SKIP_SPACE(c);
     }
     else
     {
-      result->car->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+      result->car->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
       result->car->cdr->car_value.data = c;
 
       while(*c && !isspace(*c) && *c != ')')
@@ -178,7 +177,7 @@ JPTL_recursive_parse(struct JPTL_program* p, char** pc)
   {
     *c++ = 0;
 
-    result->car = JPTL_recursive_parse(p, &c);
+    result->car = JPT_recursive_parse(p, &c);
 
     SKIP_SPACE(c);
   }
@@ -229,7 +228,7 @@ JPTL_recursive_parse(struct JPTL_program* p, char** pc)
   }
   else
   {
-    result->cdr = JPTL_recursive_parse(p, &c);
+    result->cdr = JPT_recursive_parse(p, &c);
   }
 
   *pc = c;
@@ -238,8 +237,8 @@ JPTL_recursive_parse(struct JPTL_program* p, char** pc)
 }
 
 static void
-JPTL_display_recursive(struct JPT_info* info, struct JPTL_context* c,
-                       struct JPTL_cons* cons)
+JPT_display_recursive(struct JPT_info* info, struct JPT_context* c,
+                       struct JPT_cons* cons)
 {
   if(!cons)
   {
@@ -253,7 +252,7 @@ JPTL_display_recursive(struct JPT_info* info, struct JPTL_context* c,
   if(cons->car_value.data)
     printf("%s", cons->car_value.data);
   else
-    JPTL_display_recursive(info, c, cons->car);
+    JPT_display_recursive(info, c, cons->car);
 
   while(cons->cdr)
   {
@@ -265,17 +264,17 @@ JPTL_display_recursive(struct JPT_info* info, struct JPTL_context* c,
     {
       printf(" ");
 
-      JPTL_display_recursive(info, c, cons->car);
+      JPT_display_recursive(info, c, cons->car);
     }
   }
 
   printf(")");
 }
 
-static struct JPTL_cons*
-JPTL_display(struct JPT_info* info, struct JPTL_context* c, struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_display(struct JPT_info* info, struct JPT_context* c, struct JPT_cons* cons)
 {
-  struct JPTL_cons* result;
+  struct JPT_cons* result;
 
   if(!cons)
   {
@@ -284,18 +283,18 @@ JPTL_display(struct JPT_info* info, struct JPTL_context* c, struct JPTL_cons* co
     return 0;
   }
 
-  result = JPTL_eval(info, c, cons->cdr);
+  result = JPT_eval(info, c, cons->cdr);
 
-  JPTL_display_recursive(info, c, result);
+  JPT_display_recursive(info, c, result);
 
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_eval(struct JPT_info* info, struct JPTL_context* c,
-          struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_eval(struct JPT_info* info, struct JPT_context* c,
+          struct JPT_cons* cons)
 {
-  struct JPTL_program* p = c->p;
+  struct JPT_program* p = c->p;
   size_t i;
   const char* cmd;
 
@@ -304,7 +303,7 @@ JPTL_eval(struct JPT_info* info, struct JPTL_context* c,
 
   if(cons->car_value.data)
   {
-    struct JPTL_variable* var = c->locals;
+    struct JPT_variable* var = c->locals;
 
     while(var)
     {
@@ -344,8 +343,8 @@ JPTL_eval(struct JPT_info* info, struct JPTL_context* c,
 }
 
 static void
-JPTL_flatten_recursive(struct JPTL_program* p, struct JPTL_cons* target,
-                       const struct JPTL_cons* source)
+JPT_flatten_recursive(struct JPT_program* p, struct JPT_cons* target,
+                       const struct JPT_cons* source)
 {
   while(source)
   {
@@ -366,12 +365,12 @@ JPTL_flatten_recursive(struct JPTL_program* p, struct JPTL_cons* target,
         {
           if(!target->car)
           {
-            target->car = JPTL_alloc(p, sizeof(struct JPTL_cons));
+            target->car = JPT_alloc(p, sizeof(struct JPT_cons));
             target->cdr = target->car;
           }
           else
           {
-            target->cdr->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+            target->cdr->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
             target->cdr = target->cdr->cdr;
           }
 
@@ -386,50 +385,50 @@ JPTL_flatten_recursive(struct JPTL_program* p, struct JPTL_cons* target,
       }
     }
     else if(source->car)
-      JPTL_flatten_recursive(p, target, source->car);
+      JPT_flatten_recursive(p, target, source->car);
 
     source = source->cdr;
   }
 }
 
-static struct JPTL_cons*
-JPTL_flatten(struct JPT_info* info, struct JPTL_context* c,
-             struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_flatten(struct JPT_info* info, struct JPT_context* c,
+             struct JPT_cons* cons)
 {
-  struct JPTL_cons result;
-  struct JPTL_cons* values;
+  struct JPT_cons result;
+  struct JPT_cons* values;
 
   memset(&result, 0, sizeof(result));
 
-  values = JPTL_eval(info, c, cons->cdr);
+  values = JPT_eval(info, c, cons->cdr);
 
-  JPTL_flatten_recursive(c->p, &result, values);
+  JPT_flatten_recursive(c->p, &result, values);
 
   return result.car;
 }
 
-static struct JPTL_cons*
-JPTL_filter(struct JPT_info* info, struct JPTL_context* c,
-            struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_filter(struct JPT_info* info, struct JPT_context* c,
+            struct JPT_cons* cons)
 {
-  struct JPTL_cons* child;
-  struct JPTL_cons* result;
-  struct JPTL_cons* filter;
+  struct JPT_cons* child;
+  struct JPT_cons* result;
+  struct JPT_cons* filter;
 
-  result = JPTL_eval(info, c, cons->cdr);
+  result = JPT_eval(info, c, cons->cdr);
 
   if(!result)
     return 0;
 
   for(child = cons->cdr->cdr; child; child = child->cdr)
   {
-    struct JPTL_cons* prev = 0;
-    struct JPTL_cons* i;
+    struct JPT_cons* prev = 0;
+    struct JPT_cons* i;
     const char* filter_column;
     const char* filter_value;
     size_t filter_value_size;
 
-    filter = JPTL_eval(info, c, child);
+    filter = JPT_eval(info, c, child);
 
     filter_column = filter->car_value.data;
     filter_value = filter->cdr->car_value.data;
@@ -470,20 +469,20 @@ JPTL_filter(struct JPT_info* info, struct JPTL_context* c,
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_nintersection(struct JPT_info* info, struct JPTL_context* c,
-                   struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_nintersection(struct JPT_info* info, struct JPT_context* c,
+                   struct JPT_cons* cons)
 {
-  struct JPTL_cons* child;
-  struct JPTL_cons* values;
-  struct JPTL_cons* result = 0;
+  struct JPT_cons* child;
+  struct JPT_cons* values;
+  struct JPT_cons* result = 0;
   int first = 1;
 
   child = cons->cdr;
 
   while(child)
   {
-    values = JPTL_eval(info, c, child);
+    values = JPT_eval(info, c, child);
 
     if(first)
     {
@@ -492,9 +491,9 @@ JPTL_nintersection(struct JPT_info* info, struct JPTL_context* c,
     }
     else
     {
-      struct JPTL_cons* prev = 0;
-      struct JPTL_cons* a;
-      struct JPTL_cons* b;
+      struct JPT_cons* prev = 0;
+      struct JPT_cons* a;
+      struct JPT_cons* b;
       int cmp;
 
       a = result;
@@ -536,13 +535,13 @@ JPTL_nintersection(struct JPT_info* info, struct JPTL_context* c,
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_let(struct JPT_info* info, struct JPTL_context* c,
-         struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_let(struct JPT_info* info, struct JPT_context* c,
+         struct JPT_cons* cons)
 {
-  struct JPTL_cons* i;
-  struct JPTL_cons* result = 0;
-  struct JPTL_context newc;
+  struct JPT_cons* i;
+  struct JPT_cons* result = 0;
+  struct JPT_context newc;
 
   if(!cons->cdr || !cons->cdr->car)
   {
@@ -560,18 +559,18 @@ JPTL_let(struct JPT_info* info, struct JPTL_context* c,
 
   while(i)
   {
-    struct JPTL_variable* var;
+    struct JPT_variable* var;
 
-    var = JPTL_alloc(c->p, sizeof(struct JPTL_variable));
+    var = JPT_alloc(c->p, sizeof(struct JPT_variable));
 
     var->name = i->car_value.data;
     if(i->cdr->car_value.data)
     {
-      var->value = JPTL_alloc(c->p, sizeof(struct JPTL_cons));
+      var->value = JPT_alloc(c->p, sizeof(struct JPT_cons));
       var->value->car_value = i->cdr->car_value;
     }
     else
-      var->value = JPTL_eval(info, c, i->cdr);
+      var->value = JPT_eval(info, c, i->cdr);
     var->next = c->locals;
     c->locals = var;
 
@@ -586,7 +585,7 @@ JPTL_let(struct JPT_info* info, struct JPTL_context* c,
 
   while(i)
   {
-    result = JPTL_eval(info, &newc, i);
+    result = JPT_eval(info, &newc, i);
 
     if(!i->cdr)
       break;
@@ -597,21 +596,21 @@ JPTL_let(struct JPT_info* info, struct JPTL_context* c,
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
-            struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_lookup(struct JPT_info* info, struct JPT_context* c,
+            struct JPT_cons* cons)
 {
-  struct JPTL_program* p = c->p;
-  struct JPTL_cons* columns;
-  struct JPTL_cons* column;
+  struct JPT_program* p = c->p;
+  struct JPT_cons* columns;
+  struct JPT_cons* column;
   const char* column_name;
 
-  struct JPTL_cons* rows;
-  struct JPTL_cons* row;
+  struct JPT_cons* rows;
+  struct JPT_cons* row;
   const char* row_name;
 
-  struct JPTL_cons* result = 0;
-  struct JPTL_cons* last = 0;
+  struct JPT_cons* result = 0;
+  struct JPT_cons* last = 0;
 
   if(!cons->cdr || !cons->cdr->car)
   {
@@ -627,37 +626,37 @@ JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
     longjmp(p->error_handler, 1);
   }
 
-  columns = JPTL_eval(info, c, cons->cdr);
+  columns = JPT_eval(info, c, cons->cdr);
 
-  rows = JPTL_eval(info, c, cons->cdr->cdr);
+  rows = JPT_eval(info, c, cons->cdr->cdr);
 
   for(row = rows; row; row = row->cdr)
   {
-    struct JPTL_cons* r;
+    struct JPT_cons* r;
 
     row_name = row->car_value.data;
 
     if(!row_name)
       continue;
 
-    r = JPTL_alloc(p, sizeof(struct JPTL_cons));
+    r = JPT_alloc(p, sizeof(struct JPT_cons));
 
     if(!result)
     {
-      result = JPTL_alloc(p, sizeof(struct JPTL_cons));
+      result = JPT_alloc(p, sizeof(struct JPT_cons));
       result->car = r;
       last = result;
     }
     else
     {
-      last->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+      last->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
       last = last->cdr;
       last->car = r;
     }
 
     for(column = columns; column; column = column->cdr)
     {
-      struct JPTL_pool* pool;
+      struct JPT_pool* pool;
       char* data;
       size_t data_size;
 
@@ -677,7 +676,7 @@ JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
 
         if(column != columns)
         {
-          r->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+          r->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
           r = r->cdr;
         }
       }
@@ -685,14 +684,14 @@ JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
       {
         if(column != columns)
         {
-          r->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+          r->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
           r = r->cdr;
         }
 
         r->car_value.data = data;
         r->car_value.size = data_size;
 
-        pool = malloc(sizeof(struct JPTL_pool));
+        pool = malloc(sizeof(struct JPT_pool));
         pool->data = data;
         pool->data_used = JPT_POOL_SIZE;
 
@@ -713,33 +712,33 @@ JPTL_lookup(struct JPT_info* info, struct JPTL_context* c,
   return result;
 }
 
-static struct JPTL_cons*
-JPTL_lookupf(struct JPT_info* info, struct JPTL_context* c,
-             struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_lookupf(struct JPT_info* info, struct JPT_context* c,
+             struct JPT_cons* cons)
 {
-  struct JPTL_cons result;
-  struct JPTL_cons* values;
+  struct JPT_cons result;
+  struct JPT_cons* values;
 
-  values = JPTL_lookup(info, c, cons);
+  values = JPT_lookup(info, c, cons);
 
   if(!values)
     return 0;
 
   memset(&result, 0, sizeof(result));
-  JPTL_flatten_recursive(c->p, &result, values);
+  JPT_flatten_recursive(c->p, &result, values);
 
   return result.car;
 }
 
-static struct JPTL_cons*
-JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
-          struct JPTL_cons* cons)
+static struct JPT_cons*
+JPT_zipf(struct JPT_info* info, struct JPT_context* c,
+          struct JPT_cons* cons)
 {
-  struct JPTL_program* p = c->p;
-  struct JPTL_cons* tmp;
-  struct JPTL_cons** values;
-  struct JPTL_cons* result = 0;
-  struct JPTL_cons* last = 0;
+  struct JPT_program* p = c->p;
+  struct JPT_cons* tmp;
+  struct JPT_cons** values;
+  struct JPT_cons* result = 0;
+  struct JPT_cons* last = 0;
   size_t i, child_count;
   int found;
 
@@ -751,16 +750,16 @@ JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
   if(!child_count)
     return 0;
 
-  values = alloca(sizeof(struct JPTL_cons) * child_count);
+  values = alloca(sizeof(struct JPT_cons) * child_count);
 
   i = 0;
 
   for(tmp = cons->cdr; tmp; tmp = tmp->cdr)
-    values[i++] = JPTL_eval(info, c, tmp);
+    values[i++] = JPT_eval(info, c, tmp);
 
   do
   {
-    struct JPTL_cons* r = 0;
+    struct JPT_cons* r = 0;
 
     found = 0;
 
@@ -771,17 +770,17 @@ JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
 
       if(!r)
       {
-        r = JPTL_alloc(p, sizeof(struct JPTL_cons));
+        r = JPT_alloc(p, sizeof(struct JPT_cons));
 
         if(!result)
         {
-          result = JPTL_alloc(p, sizeof(struct JPTL_cons));
+          result = JPT_alloc(p, sizeof(struct JPT_cons));
           result->car = r;
           last = result;
         }
         else
         {
-          last->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+          last->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
           last = last->cdr;
           last->car = r;
         }
@@ -794,7 +793,7 @@ JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
       {
         if(found)
         {
-          r->cdr = JPTL_alloc(p, sizeof(struct JPTL_cons));
+          r->cdr = JPT_alloc(p, sizeof(struct JPT_cons));
           r = r->cdr;
         }
 
@@ -812,9 +811,9 @@ JPTL_zipf(struct JPT_info* info, struct JPTL_context* c,
 }
 
 static void
-JPTL_free_program(struct JPTL_program* p)
+JPT_free_program(struct JPT_program* p)
 {
-  struct JPTL_pool* pool;
+  struct JPT_pool* pool;
 
   while(p->first_pool)
   {
@@ -828,40 +827,40 @@ JPTL_free_program(struct JPTL_program* p)
   free(p);
 }
 
-static struct JPTL_program*
-JPTL_compile(const char* query)
+static struct JPT_program*
+JPT_compile(const char* query)
 {
-  struct JPTL_program* p;
+  struct JPT_program* p;
   char* c;
 
-  p = malloc(sizeof(struct JPTL_program));
-  memset(p, 0, sizeof(struct JPTL_program));
+  p = malloc(sizeof(struct JPT_program));
+  memset(p, 0, sizeof(struct JPT_program));
 
   c = p->data = strdup(query);
 
   if(setjmp(p->error_handler))
   {
     JPT_set_error(p->error, EINVAL);
-    JPTL_free_program(p);
+    JPT_free_program(p);
 
     return 0;
   }
 
-  p->head = JPTL_recursive_parse(p, &c);
+  p->head = JPT_recursive_parse(p, &c);
 
   return p;
 }
 
 int
-jptl_eval_string(struct JPT_info* info, const char* query, jptl_callback callback, void* arg)
+jpt_eval(struct JPT_info* info, const char* query, jpt_cons_callback callback, void* arg)
 {
-  struct JPTL_context c;
-  struct JPTL_cons* result;
+  struct JPT_context c;
+  struct JPT_cons* result;
 
   JPT_clear_error();
 
   memset(&c, 0, sizeof(c));
-  c.p = JPTL_compile(query);
+  c.p = JPT_compile(query);
 
   if(!c.p)
     return -1;
@@ -873,11 +872,11 @@ jptl_eval_string(struct JPT_info* info, const char* query, jptl_callback callbac
     return -1;
   }
 
-  result = JPTL_eval(info, &c, c.p->head);
+  result = JPT_eval(info, &c, c.p->head);
 
   callback(result, arg);
 
-  JPTL_free_program(c.p);
+  JPT_free_program(c.p);
 
   return 0;
 }

@@ -6,6 +6,8 @@ AC_PROG_LIBTOOL
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 
+GUILE_FLAGS
+
 AC_ARG_WITH([php],
             [AS_HELP_STRING([--with-php], [build djpt PHP module<:@default=no@:>@])],
             [], [with_php=no])

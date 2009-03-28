@@ -704,8 +704,8 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
 }
 
 int
-djpt_eval_string(struct DJPT_info* info, const char* program,
-                 djpt_eval_callback callback, void* arg)
+djpt_eval(struct DJPT_info* info, const char* program,
+          djpt_eval_callback callback, void* arg)
 {
   struct DJPT_request_eval_string* eval_string;
   struct DJPT_request* response;

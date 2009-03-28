@@ -51,14 +51,41 @@ extern "C" {
  */
 struct JPT_info;
 
+struct JPT_value
+{
+  const char* data;
+  size_t size;
+};
+
+/**
+ * Cons type returned by Lisp queries.
+ */
+struct JPT_cons
+{
+  struct JPT_value car_value;
+  struct JPT_cons* car;
+  struct JPT_cons* cdr;
+};
+
 /**
  * Cell callback prototype.
  *
- * This is the prototype for the function call by functions returning single
+ * This is the prototype for the callbacks used by functions returning single
  * cells at a time.
  */
 typedef int (*jpt_cell_callback)(const char* row, const char* column, const void* data, size_t data_size, uint64_t* timestamp, void* arg);
 
+/**
+ * Cons callback prototype.
+ *
+ * This is the prototype for the callbacks used by functions returning a cons.
+ */
+typedef int (*jpt_cons_callback)(struct JPT_cons* data, void* arg);
+
+/**
+ * Returns a string represenation of the last error.  Usually much more
+ * detailed than strerror().
+ */
 const char*
 jpt_last_error();
 
@@ -88,7 +115,8 @@ jpt_close(struct JPT_info* info);
  * be used.  `mindate' can be used for incremental backups.
  */
 int
-jpt_backup(struct JPT_info* info, const char* filename, const char* column, uint64_t mindate);
+jpt_backup(struct JPT_info* info, const char* filename, const char* column,
+           uint64_t mindate);
 
 /**
  * Restores a table from a file created by `jpt_backup'.
@@ -133,6 +161,18 @@ jpt_insert(struct JPT_info* info,
            const char* row, const char* column,
            const void* value, size_t value_size, int flags);
 
+/**
+ * Inserts data into a given cell.
+ *
+ * Unlike `jpt_insert', this functions accepts a `timestamp' parameter which
+ * will be stored along with the value.
+ *
+ * This function potentially calls `jpt_compact' to ensure there is
+ * enough available space in the memtable.
+ *
+ * `flags' can be either JPT_IGNORE, JPT_APPEND or JPT_REPLACE, and
+ * denotes how the value is merged the cell already exists.
+ */
 int
 jpt_insert_timestamp(struct JPT_info* info,
                      const char* row, const char* column,
@@ -229,8 +269,20 @@ jpt_column_scan(struct JPT_info* info, const char* column,
 uint64_t
 jpt_get_counter(struct JPT_info* info, const char* name);
 
+/**
+ * Returns the number of microseconds since Unix epoch, discounting leap
+ * seconds.
+ */
 uint64_t
 jpt_gettime();
+
+/**
+ * Evaluates a JPT-script program and sends the resulting cons to a callback
+ * function.
+ */
+int
+jpt_eval(struct JPT_info* info, const char* query,
+         jpt_cons_callback callback, void* arg);
 
 #ifdef __cplusplus
 }

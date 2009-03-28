@@ -64,8 +64,8 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
                  size_t limit);
 
 int
-djpt_eval_string(struct DJPT_info* info, const char* program,
-                 djpt_eval_callback callback, void* arg);
+djpt_eval(struct DJPT_info* info, const char* program,
+          djpt_eval_callback callback, void* arg);
 
 uint64_t
 djpt_get_counter(struct DJPT_info* info, const char* name);
