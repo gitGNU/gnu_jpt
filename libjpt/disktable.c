@@ -402,7 +402,7 @@ JPT_disktable_get(struct JPT_disktable* disktable,
 int
 JPT_disktable_cursor_advance(struct JPT_info* info,
                              struct JPT_disktable_cursor* cursor,
-                             size_t columnidx)
+                             uint32_t columnidx)
 {
   struct JPT_key_info key_info;
   unsigned char* cellmeta;
@@ -445,10 +445,10 @@ repeat:
         return -1;
     }
 
-    cellmeta = cursor->data;
+    cellmeta = (unsigned char*) cursor->data;
     cursor->columnidx = CELLMETA_TO_COLUMN(cellmeta);
 
-    if(columnidx != (size_t) -1 && cursor->columnidx != columnidx)
+    if(columnidx != JPT_INVALID_COLUMN && cursor->columnidx != columnidx)
     {
       if(cursor->columnidx > columnidx)
       {

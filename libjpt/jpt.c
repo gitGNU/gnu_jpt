@@ -327,29 +327,29 @@ JPT_get_column_idx(struct JPT_info* info, const char* column, int flags)
       {
         errno = ENOSPC;
 
-        return (uint32_t) ~0;
+        return JPT_INVALID_COLUMN;
       }
 
       index = info->next_column++;
       JPT_generate_key(prefix, "", index);
 
       if(-1 == JPT_insert(info, column, "__COLUMNS__", &index, sizeof(uint32_t), &timestamp, JPT_REPLACE))
-        return (uint32_t) ~0;
+        return JPT_INVALID_COLUMN;
 
       if(-1 == JPT_insert(info, prefix, "__REV_COLUMNS__", column, strlen(column) + 1, &timestamp, JPT_REPLACE))
-        return (uint32_t) ~0;
+        return JPT_INVALID_COLUMN;
 
       if(-1 == JPT_insert(info, "next-column", "__META__", &info->next_column, sizeof(uint32_t), &timestamp, JPT_REPLACE))
-        return (uint32_t) ~0;
+        return JPT_INVALID_COLUMN;
     }
     else
-      return (uint32_t) ~0;
+      return JPT_INVALID_COLUMN;
   }
   else if(size != sizeof(uint32_t))
   {
     errno = EILSEQ;
 
-    return (uint32_t) ~0;
+    return JPT_INVALID_COLUMN;
   }
 
   new_name = strdup(column);
@@ -1134,7 +1134,7 @@ jpt_major_compact(struct JPT_info* info)
     {
       if(!cursors[i].data_size && cursors[i].offset < cursors[i].disktable->key_info_count)
       {
-        if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], (size_t) -1))
+        if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], JPT_INVALID_COLUMN))
           goto fail;
       }
     }
@@ -1237,7 +1237,7 @@ jpt_major_compact(struct JPT_info* info)
     {
       if(!cursors[i].data_size && cursors[i].offset < cursors[i].disktable->key_info_count)
       {
-        if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], (size_t) -1))
+        if(-1 == JPT_disktable_cursor_advance(info, &cursors[i], JPT_INVALID_COLUMN))
           goto fail;
       }
     }
@@ -1371,7 +1371,7 @@ JPT_insert(struct JPT_info* info,
 
   columnidx = JPT_get_column_idx(info, column, JPT_COL_CREATE);
 
-  if(columnidx == (uint32_t) ~0)
+  if(columnidx == JPT_INVALID_COLUMN)
     return -1;
 
   JPT_generate_key(key, row, columnidx);
@@ -1523,7 +1523,7 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 
   columnidx = JPT_get_column_idx(info, column, 0);
 
-  if(columnidx == (uint32_t) ~0)
+  if(columnidx == JPT_INVALID_COLUMN)
   {
     errno = ENOENT;
 
@@ -1724,7 +1724,7 @@ JPT_log_replay(struct JPT_info* info)
 
       col[collen] = 0;
 
-      if(JPT_get_column_idx(info, col, JPT_COL_CREATE) == (uint32_t) ~0)
+      if(JPT_get_column_idx(info, col, JPT_COL_CREATE) == JPT_INVALID_COLUMN)
         goto fail;
 
       free(col); col = 0;
@@ -1916,7 +1916,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
 
   columnidx = JPT_get_column_idx(info, column, 0);
 
-  if(columnidx == (uint32_t) ~0)
+  if(columnidx == JPT_INVALID_COLUMN)
     return 0;
 
   JPT_generate_key(prefix, "", columnidx);
@@ -2017,7 +2017,7 @@ JPT_remove_column(struct JPT_info* info, const char* column, int flags)
 
     while(cursor.offset < cursor.disktable->key_info_count)
     {
-      if(-1 == JPT_disktable_cursor_advance(info, &cursor, (size_t) -1))
+      if(-1 == JPT_disktable_cursor_advance(info, &cursor, JPT_INVALID_COLUMN))
         return -1;
 
       if(cursor.columnidx != columnidx)
@@ -2149,7 +2149,7 @@ jpt_create_column(struct JPT_info* info, const char* column, int flags)
 {
   JPT_writer_enter(info);
 
-  if(JPT_get_column_idx(info, column, JPT_COL_CREATE) == (uint32_t) ~0)
+  if(JPT_get_column_idx(info, column, JPT_COL_CREATE) == JPT_INVALID_COLUMN)
   {
     JPT_writer_leave(info);
 
@@ -2208,7 +2208,7 @@ jpt_has_key(struct JPT_info* info, const char* row, const char* column)
 
   columnidx = JPT_get_column_idx(info, column, 0);
 
-  if(columnidx == (uint32_t) ~0)
+  if(columnidx == JPT_INVALID_COLUMN)
   {
     JPT_reader_leave(info);
 
@@ -2249,7 +2249,7 @@ jpt_has_column(struct JPT_info* info, const char* column)
 
   JPT_reader_enter(info);
 
-  if(JPT_get_column_idx(info, column, 0) == (uint32_t) ~0)
+  if(JPT_get_column_idx(info, column, 0) == JPT_INVALID_COLUMN)
     result = -1;
 
   JPT_reader_leave(info);
@@ -2275,7 +2275,7 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
 
   columnidx = JPT_get_column_idx(info, column, 0);
 
-  if(columnidx == (uint32_t) ~0)
+  if(columnidx == JPT_INVALID_COLUMN)
   {
     errno = ENOENT;
 

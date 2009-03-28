@@ -31,7 +31,11 @@
 
 #define COLUMN_PREFIX_SIZE 4
 
-#define CELLMETA_TO_COLUMN(cellmeta) ((cellmeta[3] - 1) + (cellmeta[2] - 1) * 255 + (cellmeta[1] - 1) * 65025 + (cellmeta[0] - 1) * 16581375)
+#define CELLMETA_TO_COLUMN(cellmeta) \
+    (((unsigned char) (cellmeta[3]) - 1) \
+   + ((unsigned char) (cellmeta[2]) - 1) * 255 \
+   + ((unsigned char) (cellmeta[1]) - 1) * 65025 \
+   + ((unsigned char) (cellmeta[0]) - 1) * 16581375)
 
 #define JPT_DISKTABLE_READ_KEYINFO(disktable, target, keyidx) \
   (disktable->key_infos_mapped ? (memcpy(target, disktable->key_infos + keyidx, sizeof(struct JPT_key_info)), 0) \
@@ -48,6 +52,8 @@
 
 #define JPT_KEY_REMOVED             0x0001
 #define JPT_KEY_NEW_COLUMN          0x0002
+
+#define JPT_INVALID_COLUMN ((uint32_t) ~0)
 
 extern __thread int JPT_errno;
 extern __thread char* JPT_last_error;
@@ -159,7 +165,7 @@ struct JPT_disktable_cursor
   uint64_t timestamp;
   struct JPT_disktable* disktable;
   void* buffer;
-  void* data;
+  char* data;
   size_t data_size;
   size_t data_alloc;
   off_t data_offset;
@@ -228,7 +234,7 @@ JPT_disktable_get(struct JPT_disktable* disktable,
 int
 JPT_disktable_cursor_advance(struct JPT_info* info,
                              struct JPT_disktable_cursor* cursor,
-                             size_t columnidx);
+                             uint32_t columnidx);
 
 int
 JPT_disktable_cursor_remap(struct JPT_info* info,
