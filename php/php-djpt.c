@@ -30,7 +30,7 @@ function_entry djpt_functions[] =
     PHP_FE(djpt_has_key, 0)
     PHP_FE(djpt_get, 0)
     PHP_FE(djpt_column_scan, 0)
-    PHP_FE(djpt_eval_string, 0)
+    PHP_FE(djpt_eval, 0)
     PHP_FE(djpt_get_counter, 0)
     { 0, 0, 0 }
 };
@@ -352,7 +352,7 @@ eval_callback(const void* data, size_t data_size, void* arg)
   return 0;
 }
 
-PHP_FUNCTION(djpt_eval_string)
+PHP_FUNCTION(djpt_eval)
 {
   int argc = ZEND_NUM_ARGS();
   long handle = 0;
@@ -371,7 +371,7 @@ PHP_FUNCTION(djpt_eval_string)
 
   array_init(return_value);
 
-  if(-1 == djpt_eval_string(handles[handle].info, program, eval_callback, return_value))
+  if(-1 == djpt_eval(handles[handle].info, program, eval_callback, return_value))
   {
     zend_hash_destroy(Z_ARRVAL_P(return_value));
     efree(Z_ARRVAL_P(return_value));
