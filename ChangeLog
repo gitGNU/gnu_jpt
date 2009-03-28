@@ -1,3 +1,18 @@
+2009-03-28  Morten Huistveit <morten@rashbox.org>
+
+  * Version 1.1.0
+  * Added the djptd daemon for allowing database access from multiple processes
+    at the same time.
+  * Use POSIX readers/writer lock instead of unfair condition vairable based lock.
+  * Allow re-using disk space consumed by removed values.
+  * Improved test suite to increase coverage.
+  * Added PHP module.
+  * Sync before rename to cope with delayed block allocation in ext4.
+  * Don't allocate memtable before insertion, to reduce memory usage in
+    read-only usage patterns.
+  * Started transition to literate programming (only memtable for now).
+  * Fixed several data corruption issues.
+
 2008-11-11  Morten Hustveit  <morten@rashbox.org>
 
   * Version 1.0.0

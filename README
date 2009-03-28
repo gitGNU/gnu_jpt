@@ -14,5 +14,5 @@ The database employs PATRICIA tries and bloom filters for fast data
 retrieval.  Newly inserted data is buffered in a splay tree (as well as a
 linear transaction log file) for fast data storage.
 
-Unlike most databases, jpt supports the "append" operation, making it suited
-to build indexes.
+Unlike most databases, jpt supports the "append" operation, making it suitable
+for building indexes.
