@@ -9,6 +9,7 @@
 
 #include "common.h"
 
+static struct JPT_info* db;
 static size_t count;
 
 static int
@@ -23,13 +24,30 @@ cell_callback(const char* row, const char* column, const void* data,
 
   ++count;
 
+  if(count == 1000)
+  {
+    WANT_SUCCESS(jpt_compact(db));
+  }
+  else if(count > 2000 && count < 2100)
+  {
+    WANT_SUCCESS(jpt_remove(db, row, column));
+
+    if((count % 20) == 0)
+    {
+      WANT_SUCCESS(jpt_compact(db));
+    }
+  }
+  else if(count == 3000)
+  {
+    WANT_SUCCESS(jpt_major_compact(db));
+  }
+
   return 0;
 }
 
 int
 main(int argc, char** argv)
 {
-  struct JPT_info* db;
   void* ret;
   size_t retsize;
   char buf[64];

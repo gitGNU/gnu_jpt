@@ -9,6 +9,7 @@
 
 #include "common.h"
 
+static struct JPT_info* db;
 static size_t count;
 
 static int
@@ -17,6 +18,7 @@ cell_callback(const char* row, const char* column, const void* data,
 {
   char buf[64];
 
+  WANT_TRUE(!strcmp(column, "column"));
   WANT_TRUE(data_size == strlen(row));
   WANT_TRUE(0 == memcmp(row, data, data_size));
 
@@ -24,13 +26,15 @@ cell_callback(const char* row, const char* column, const void* data,
 
   WANT_TRUE(0 == strcmp(row, buf));
 
+  if(count == 1000)
+    jpt_major_compact(db);
+
   return 0;
 }
 
 int
 main(int argc, char** argv)
 {
-  struct JPT_info* db;
   void* ret;
   size_t retsize;
   char buf[64];
