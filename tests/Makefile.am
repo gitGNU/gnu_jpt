@@ -6,6 +6,8 @@ check_PROGRAMS = \
   test-journal-00 \
   test-scan-00
 
+EXTRA_DIST = common.h
+
 AM_CPPFLAGS = -I$(srcdir)/../libjpt/
 AM_CFLAGS = -g
 LDADD = ../libjpt.la

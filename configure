@@ -20221,6 +20221,7 @@ esac
 
 
 if test "x$with_php" != xno; then
+  mkdir -p php/modules
   MAYBE_PHP=php
 else
   MAYBE_PHP=

@@ -19,6 +19,7 @@ AC_CHECK_FUNCS(posix_memalign ffs gettimeofday)
 AC_C_BIGENDIAN
 
 if test "x$with_php" != xno; then
+  mkdir -p php/modules
   MAYBE_PHP=php
 else
   MAYBE_PHP=
