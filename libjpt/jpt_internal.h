@@ -127,10 +127,10 @@ struct JPT_info
   pthread_mutex_t global_lock;
 #else
   pthread_rwlock_t rw_lock;
+  pthread_rwlock_t splay_lock;
 #endif
 
   pthread_mutex_t column_hash_mutex;
-  pthread_mutex_t memtable_mutex;
 
   size_t major_compact_count;
 };

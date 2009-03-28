@@ -75,12 +75,12 @@ deep zig-zag tree to cause a stack overflow.
   void
   JPT_memtable_list_all(struct JPT_info* info, struct JPT_node*** nodes)
   {
-    pthread_mutex_lock(&info->memtable_mutex);
+    pthread_rwlock_rdlock(&info->splay_lock);
 
     if(info->root)
       JPT_memtable_list_all_left(info->root, nodes);
 
-    pthread_mutex_unlock(&info->memtable_mutex);
+    pthread_rwlock_unlock(&info->splay_lock);
   }
 
 @ These functions work like the "list all" functions, except they filter for a
@@ -131,12 +131,12 @@ given column index.
   void
   JPT_memtable_list_column(struct JPT_info* info, struct JPT_node*** nodes, uint32_t columnidx)
   {
-    pthread_mutex_lock(&info->memtable_mutex);
+    pthread_rwlock_rdlock(&info->splay_lock);
 
     if(info->root)
       JPT_memtable_list_column_left(info->root, nodes, columnidx);
 
-    pthread_mutex_unlock(&info->memtable_mutex);
+    pthread_rwlock_unlock(&info->splay_lock);
   }
 
 @ When a value is removed from the tree, its value is set to |(void*) -1|.
@@ -198,7 +198,7 @@ search key.
     struct JPT_node* n;
     int cmp;
 
-    pthread_mutex_lock(&info->memtable_mutex);
+    pthread_rwlock_rdlock(&info->splay_lock);
 
     n = info->root;
 
@@ -220,17 +220,22 @@ search key.
         continue;
       }
 
-      JPT_memtable_splay(info, n);
+      pthread_rwlock_unlock(&info->splay_lock);
+
+      if(0 == pthread_rwlock_trywrlock(&info->splay_lock))
+      {
+        JPT_memtable_splay(info, n);
+
+        pthread_rwlock_unlock(&info->splay_lock);
+      }
 
       if(n->data.value == (void*) -1)
         break;
 
-      pthread_mutex_unlock(&info->memtable_mutex);
-
       return 0;
     }
 
-    pthread_mutex_unlock(&info->memtable_mutex);
+    pthread_rwlock_unlock(&info->splay_lock);
 
     return -1;
   }
@@ -248,7 +253,7 @@ appends the associated value to the pointers passed as parameters.
     struct JPT_node* n;
     int cmp;
 
-    pthread_mutex_lock(&info->memtable_mutex);
+    pthread_rwlock_rdlock(&info->splay_lock);
 
     n = info->root;
 
@@ -275,12 +280,19 @@ appends the associated value to the pointers passed as parameters.
 
       @< Read value at current node @>
 
-      pthread_mutex_unlock(&info->memtable_mutex);
+      pthread_rwlock_unlock(&info->splay_lock);
+
+      if(0 == pthread_rwlock_trywrlock(&info->splay_lock))
+      {
+        JPT_memtable_splay(info, n);
+
+        pthread_rwlock_unlock(&info->splay_lock);
+      }
 
       return 0;
     }
 
-    pthread_mutex_unlock(&info->memtable_mutex);
+    pthread_rwlock_unlock(&info->splay_lock);
 
     return -1;
   }
@@ -308,8 +320,6 @@ a sort of tombstone.
 
   if(timestamp)
     *timestamp = n->timestamp;
-
-  JPT_memtable_splay(info, n);
 
 @ When reading data from the memtable, the caller can choose whether or not to
 read a predetermined number of bytes (upper bound).  When doing so, the caller
