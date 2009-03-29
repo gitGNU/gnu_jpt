@@ -266,6 +266,14 @@ JPT_get_column_idx(struct JPT_info* info, const char* column, int flags)
   char* old_name;
   char prefix[COLUMN_PREFIX_SIZE + 1];
 
+  if(!column[0])
+  {
+    asprintf(&JPT_last_error, "Empty column name");
+    errno = EINVAL;
+
+    return -1;
+  }
+
   if(column[0] == '_' && column[1] == '_')
   {
     if(!strcmp(column + 2, "META__"))
@@ -1362,8 +1370,17 @@ JPT_insert(struct JPT_info* info,
   char* key = alloca(strlen(row) + COLUMN_PREFIX_SIZE + 1);
   int written = 0;
 
+  if(!row[0])
+  {
+    asprintf(&JPT_last_error, "Empty row name");
+    errno = EINVAL;
+
+    return -1;
+  }
+
   if(row_size + COLUMN_PREFIX_SIZE - 1 > PATRICIA_MAX_KEYLENGTH)
   {
+    asprintf(&JPT_last_error, "Row name too long (maximum is %zu)", PATRICIA_MAX_KEYLENGTH - COLUMN_PREFIX_SIZE - 1);
     errno = EINVAL;
 
     return -1;
@@ -1525,6 +1542,7 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 
   if(columnidx == JPT_INVALID_COLUMN)
   {
+    asprintf(&JPT_last_error, "Column \"%s\" does not exist", column);
     errno = ENOENT;
 
     return -1;
@@ -1549,6 +1567,7 @@ JPT_remove(struct JPT_info* info, const char* row, const char* column)
 
   if(!found)
   {
+    asprintf(&JPT_last_error, "Key \"%s\", \"%s\" does not exist", row, column);
     errno = ENOENT;
 
     return -1;
@@ -2277,6 +2296,7 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
 
   if(columnidx == JPT_INVALID_COLUMN)
   {
+    asprintf(&JPT_last_error, "Column \"%s\" does not exist", column);
     errno = ENOENT;
 
     return -1;
@@ -2307,7 +2327,10 @@ JPT_get(struct JPT_info* info, const char* row, const char* column,
     res = 0;
 
   if(res == -1)
+  {
+    asprintf(&JPT_last_error, "Key \"%s\", \"%s\" does not exist", row, column);
     errno = ENOENT;
+  }
 
   if(!max_read && *value)
     ((char*) *value)[*value_size] = 0;
