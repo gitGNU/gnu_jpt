@@ -1380,7 +1380,9 @@ JPT_insert(struct JPT_info* info,
 
   if(row_size + COLUMN_PREFIX_SIZE - 1 > PATRICIA_MAX_KEYLENGTH)
   {
-    asprintf(&JPT_last_error, "Row name too long (maximum is %zu)", PATRICIA_MAX_KEYLENGTH - COLUMN_PREFIX_SIZE - 1);
+    asprintf(&JPT_last_error, "Row name too long (%zu, maximum is %zu)",
+             row_size - 1,
+             (size_t) (PATRICIA_MAX_KEYLENGTH - COLUMN_PREFIX_SIZE));
     errno = EINVAL;
 
     return -1;
