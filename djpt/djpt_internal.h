@@ -222,6 +222,12 @@ struct DJPT_request_major_compact
 extern struct DJPT_jpt_handle DJPT_jpt_handles[];
 extern size_t DJPT_jpt_handle_alloc;
 
+extern __thread int DJPT_errno;
+extern __thread char* DJPT_last_error;
+
+int
+DJPT_connect();
+
 ssize_t
 DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size);
 

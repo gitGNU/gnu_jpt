@@ -30,9 +30,6 @@
 #include "djpt_internal.h"
 #include "jpt.h"
 
-static __thread int DJPT_errno = 0;
-static __thread char* DJPT_last_error = 0;
-
 const char*
 djpt_last_error()
 {
@@ -154,21 +151,17 @@ DJPT_open(struct DJPT_peer* peer, const char* filename)
   return res;
 }
 
-struct DJPT_info*
-djpt_init(const char* database)
+int
+DJPT_connect()
 {
   struct sockaddr_un unixaddr;
   struct msghdr msghdr;
   struct iovec iov;
   struct cmsghdr* cmsg;
   struct ucred cred;
-  struct DJPT_info* info;
-  struct DJPT_peer* peer;
   char* user_name;
   char dummy = 0;
   int fd;
-
-  DJPT_clear_error();
 
   user_name = DJPT_get_user_name();
 
@@ -177,11 +170,11 @@ djpt_init(const char* database)
     asprintf(&DJPT_last_error, "failed to determine own user name");
     errno = EINVAL;
 
-    return 0;
+    return -1;
   }
 
   if(-1 == (fd = socket(PF_UNIX, SOCK_STREAM, 0)))
-    return 0;
+    return -1;
 
   memset(&unixaddr, 0, sizeof(unixaddr));
   unixaddr.sun_family = AF_UNIX;
@@ -200,7 +193,7 @@ djpt_init(const char* database)
     {
       close(fd);
 
-      return 0;
+      return -1;
     }
 
     if(!pid)
@@ -225,7 +218,7 @@ djpt_init(const char* database)
     {
       close(fd);
 
-      return 0;
+      return -1;
     }
   }
 
@@ -257,8 +250,104 @@ djpt_init(const char* database)
 
     close(fd);
 
+    return -1;
+  }
+
+  return fd;
+}
+
+struct DJPT_info*
+djpt_init(const char* database)
+{
+  struct DJPT_info* info;
+  struct DJPT_peer* peer;
+  int fd;
+
+  DJPT_clear_error();
+
+  if(strchr(database, ':'))
+  {
+    pid_t child;
+    char* tmp;
+    char* host_name;
+    int fds[2];
+
+    tmp = strdupa(database);
+    host_name = tmp;
+    tmp = strchr(tmp, ':');
+    *tmp++ = 0;
+    database = tmp;
+
+    if(database[0] != '/')
+    {
+      asprintf(&DJPT_last_error, "Only absolute paths are allowed");
+
+      return 0;
+    }
+
+    if(-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, fds))
+      return 0;
+
+    child = fork();
+
+    if(child == -1)
+      return 0;
+
+    if(!child)
+    {
+      char* args[6];
+      int argc = 0;
+
+      dup2(fds[1], 0);
+      dup2(fds[1], 1);
+      close(fds[0]);
+      close(fds[1]);
+
+      args[argc++] = "/usr/bin/env";
+      args[argc++] = "rsh";
+      args[argc++] = host_name;
+      args[argc++] = "djpt-control";
+      args[argc++] = "connect";
+      args[argc++] = 0;
+
+      execve(args[0], args, environ);
+
+      exit(EXIT_FAILURE);
+    }
+
+    close(fds[1]);
+
+    peer = malloc(sizeof(struct DJPT_peer));
+    memset(peer, 0, sizeof(struct DJPT_peer));
+    peer->fd = fds[0];
+
+    if(-1 == DJPT_open(peer, database))
+    {
+      free(peer);
+      close(fds[0]);
+
+      waitpid(child, 0, 0);
+
+      return 0;
+    }
+
+    info = malloc(sizeof(struct DJPT_info));
+    info->peer = peer;
+
+    return info;
+  }
+
+  if(database[0] != '/')
+  {
+    asprintf(&DJPT_last_error, "Only absolute paths are allowed");
+
     return 0;
   }
+
+  fd = DJPT_connect();
+
+  if(fd == -1)
+    return 0;
 
   peer = malloc(sizeof(struct DJPT_peer));
   memset(peer, 0, sizeof(struct DJPT_peer));

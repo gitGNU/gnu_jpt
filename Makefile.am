@@ -1,4 +1,4 @@
-bin_PROGRAMS = jpt-control djptd
+bin_PROGRAMS = jpt-control djpt-control djptd
 lib_LTLIBRARIES = libjpt.la libdjpt.la
 include_HEADERS = libjpt/jpt.h djpt/djpt.h
 
@@ -38,10 +38,13 @@ EXTRA_DIST =  \
   php/tests/djpt-init.phpt
 
 AM_CFLAGS = -g -Wall -pthread
-AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt
+AM_CPPFLAGS = -D_XOPEN_SOURCE=500 -D_GNU_SOURCE -D_REENTRANT -D_FILE_OFFSET_BITS=64 -DBINDIR=\"$(bindir)\" -I$(srcdir)/libjpt -I$(srcdir)/djpt
 
 jpt_control_SOURCES = jpt-control.c
 jpt_control_LDADD = libjpt.la
+
+djpt_control_SOURCES = djpt-control.c
+djpt_control_LDADD = libdjpt.la
 
 stress_test_SOURCES = stress-test.c
 stress_test_LDADD = libjpt.la

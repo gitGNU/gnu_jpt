@@ -113,12 +113,10 @@ JPT_read_all(int fd, void* target, size_t size)
   {
     ssize_t res = read(fd, o, remaining);
 
-    if(res < 0)
-      return -1;
-
-    if(!res)
+    if(res <= 0)
     {
-      asprintf(&JPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
+      if(!res)
+        asprintf(&JPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
 
       return -1;
     }
@@ -142,16 +140,12 @@ JPT_write_all(int fd, const void* target, size_t size)
 
     res = write(fd, o, remaining);
 
-    if(res < 0)
+    if(res <= 0)
     {
-      asprintf(&JPT_last_error, "Write failed: %s", strerror(errno));
-
-      return -1;
-    }
-
-    if(!res)
-    {
-      asprintf(&JPT_last_error, "Tried to write %zu bytes, terminated after %zu", size, size - remaining);
+      if(!res)
+        asprintf(&JPT_last_error, "Tried to write %zu bytes, terminated after %zu", size, size - remaining);
+      else
+        asprintf(&JPT_last_error, "Write failed: %s", strerror(errno));
 
       return -1;
     }

@@ -38,6 +38,9 @@ size_t DJPT_jpt_handle_alloc = 16;
 pthread_mutex_t DJPT_jpt_handle_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
+__thread int DJPT_errno = 0;
+__thread char* DJPT_last_error = 0;
+
 ssize_t
 DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size)
 {
@@ -57,7 +60,12 @@ DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size)
         int res = read(peer->fd, peer->read_buffer, peer->read_buffer_size);
 
         if(res <= 0)
+        {
+          if(!res)
+            asprintf(&DJPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
+
           return -1;
+        }
 
         peer->read_buffer_offset = 0;
         peer->read_buffer_fill = res;
@@ -144,7 +152,12 @@ DJPT_write_all(struct DJPT_peer* peer, const void* source, size_t size)
     int res = send(peer->fd, i, remaining, MSG_NOSIGNAL);
 
     if(res <= 0)
+    {
+      if(!res)
+        asprintf(&DJPT_last_error, "Tried to write %zu bytes, terminated after %zu", size, size - remaining);
+
       return -1;
+    }
 
     i += res;
     remaining -= res;
