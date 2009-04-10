@@ -21,6 +21,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Flags for djpt_insert */
 #define DJPT_IGNORE        0x00
 #define DJPT_APPEND        0x01
@@ -92,5 +96,9 @@ djpt_compact(struct DJPT_info* info);
 
 int
 djpt_major_compact(struct DJPT_info* info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !DJPT_H_ */
