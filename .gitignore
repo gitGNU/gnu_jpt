@@ -16,6 +16,7 @@ config.h
 core
 core.*
 djpt-control
+djpt-stress-test
 djptd
 jpt-control
 libtool
