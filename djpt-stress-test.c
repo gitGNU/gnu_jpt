@@ -106,9 +106,7 @@ static pthread_mutex_t row_locks[TOKEN_COUNT];
 static pthread_mutex_t col_locks[TOKEN_COUNT];
 static pthread_mutex_t counter_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static struct DJPT_info* db;
-
-static pthread_t threads[1];
+static pthread_t threads[4];
 
 static int done;
 
@@ -129,8 +127,6 @@ exithandler()
   for(i = 0; i < TOKEN_COUNT; ++i)
     for(j = 0; j < TOKEN_COUNT; ++j)
       free(values[i][j].data);
-
-  djpt_close(db);
 
   unlink("/tmp/test-db.tab");
   unlink("/tmp/test-db.tab.log");
@@ -184,9 +180,16 @@ cell_callback(const char* row, const char* column, const void* data, size_t data
 static void*
 test_thread(void* arg)
 {
+  struct DJPT_info* db;
+
   void* ret;
   size_t retsize;
   unsigned int seed = 0;
+
+  WANT_POINTER(db = djpt_init("/tmp/test-db.tab"));
+
+  if(!db)
+    exit(EXIT_FAILURE);
 
   while(!done)
   {
@@ -380,11 +383,6 @@ main(int argc, char** argv)
 
   WANT_TRUE(0 == unlink("/tmp/test-db.tab") || errno == ENOENT);
   WANT_TRUE(0 == unlink("/tmp/test-db.tab.log") || errno == ENOENT);
-
-  WANT_POINTER(db = djpt_init("/tmp/test-db.tab"));
-
-  if(!db)
-    return EXIT_FAILURE;
 
   signal(SIGINT, sighandler);
   atexit(exithandler);
