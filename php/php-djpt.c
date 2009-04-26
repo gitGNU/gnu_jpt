@@ -121,15 +121,16 @@ PHP_FUNCTION(djpt_init)
   }
 
   for(result = 0; result < sizeof(handles) / sizeof(handles[0]); ++result)
-    if(!handles[result].info)
+    if(!handles[result].refcount)
       break;
 
   if(result == sizeof(handles) / sizeof(handles[0]))
   {
-    zend_error(E_WARNING, "Invalid database handle %ld", handle);
+    zend_error(E_WARNING, "No available database handles");
     RETURN_FALSE;
   }
 
+  handles[result].refcount = 1;
   handles[result].info = djpt_init(database);
 
   if(!handles[result].info)
@@ -450,7 +451,7 @@ PHP_FUNCTION(djpt_eval)
 
   if(-1 == djpt_eval(handles[handle].info, program, eval_callback, return_value))
   {
-    zend_error(E_WARNING, "Evail failed: %s", djpt_last_error());
+    zend_error(E_WARNING, "Eval failed: %s", djpt_last_error());
     zend_hash_destroy(Z_ARRVAL_P(return_value));
     efree(Z_ARRVAL_P(return_value));
     RETURN_FALSE;
