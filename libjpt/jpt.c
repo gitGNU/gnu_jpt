@@ -139,8 +139,6 @@ JPT_writer_leave(struct JPT_info* info)
 const char*
 jpt_last_error()
 {
-  TRACE((stderr, "jpt_last_error()\n"));
-
   return JPT_last_error ? JPT_last_error : strerror(errno);
 }
 
@@ -509,14 +507,14 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
   assert(sizeof(off_t) == 8);
 
-  TRACE((stderr, "jpt_init(%s, %zu)\n", filename, buffer_size));
+  TRACE((stderr, "jpt_init(%s, %zu)", filename, buffer_size));
 
   JPT_clear_error();
 
   info = malloc(sizeof(struct JPT_info));
 
   if(!info)
-    return 0;
+    goto fail;
 
   memset(info, 0, sizeof(struct JPT_info));
 
@@ -580,7 +578,7 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
       free(info);
 
-      return 0;
+      goto fail;
     }
 
     version = 0;
@@ -714,6 +712,8 @@ jpt_init(const char* filename, size_t buffer_size, int flags)
 
   JPT_writer_leave(info);
 
+  TRACE((stderr, " = %p\n", info));
+
   return info;
 
 fail:
@@ -725,6 +725,8 @@ fail:
     close(info->fd);
 
   free(info);
+
+  TRACE((stderr, " = 0 (%s)\n", jpt_last_error()));
 
   return 0;
 }
@@ -2363,7 +2365,7 @@ jpt_get(struct JPT_info* info,
   }
   else
   {
-    TRACE((stderr, " = %d\n", res));
+    TRACE((stderr, " = %d (%s)\n", res, jpt_last_error()));
   }
 
   return res;
