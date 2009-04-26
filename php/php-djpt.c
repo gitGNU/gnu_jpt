@@ -83,9 +83,29 @@ PHP_FUNCTION(djpt_init)
 
   for(result = 0; result < sizeof(handles) / sizeof(handles[0]); ++result)
   {
-    if(handles[result].info
+    if(handles[result].refcount
     && !strcmp(handles[result].database, database))
     {
+      if(handlers[result].info)
+      {
+        struct timespec to;
+        memset(&to, 0, sizeof(to));
+
+        struct pollfd;
+        pollfd.fd = handles[result].info->peer->fd;
+        pollfd.events = 0;
+        pollfd.revents = 0;
+
+        if(0 < poll(&pollfd, 1, &to, 0, 0)
+        && 0 != (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)))
+        {
+          djpt_close(handles[result].info);
+          handles[result].info = djpt_init(database);
+        }
+      }
+      else
+        handles[result].info = djpt_init(database);
+
       ++handles[result].refcount;
 
       RETURN_LONG(result + 1);
