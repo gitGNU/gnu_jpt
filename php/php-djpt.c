@@ -98,12 +98,21 @@ PHP_FUNCTION(djpt_init)
         if(0 < poll(&pfd, 1, 0)
         && 0 != (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)))
         {
+          zend_error(E_NOTICE, "Database '%s' was disconnected, reconnecting", database);
+
           djpt_close(handles[result].info);
           handles[result].info = djpt_init(database);
         }
       }
       else
         handles[result].info = djpt_init(database);
+
+      if(!handles[result].info)
+      {
+        zend_error(E_WARNING, "Failed to connect to database '%s': %s", database, djpt_last_error());
+
+        RETURN_FALSE;
+      }
 
       ++handles[result].refcount;
 
@@ -116,12 +125,18 @@ PHP_FUNCTION(djpt_init)
       break;
 
   if(result == sizeof(handles) / sizeof(handles[0]))
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   handles[result].info = djpt_init(database);
 
   if(!handles[result].info)
+  {
+    zend_error(E_WARNING, "Could not connect to database '%s': %s", database, djpt_last_error());
     RETURN_FALSE;
+  }
 
   handles[result].database = strdup(database);
 
@@ -138,7 +153,10 @@ PHP_FUNCTION(djpt_close)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   if(--handles[handle].refcount)
     RETURN_TRUE;
@@ -164,13 +182,19 @@ PHP_FUNCTION(djpt_insert)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_insert(handles[handle].info, row, column, value, value_len, 0))
   {
+    if(errno != EEXIST)
+      zend_error(E_WARNING, "Insert failed: %s", djpt_last_error());
+
     RETURN_FALSE;
   }
   else
@@ -193,13 +217,17 @@ PHP_FUNCTION(djpt_append)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_insert(handles[handle].info, row, column, value, value_len, DJPT_APPEND))
   {
+    zend_error(E_WARNING, "Append failed: %s", djpt_last_error());
     RETURN_FALSE;
   }
   else
@@ -222,13 +250,17 @@ PHP_FUNCTION(djpt_replace)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_insert(handles[handle].info, row, column, value, value_len, DJPT_REPLACE))
   {
+    zend_error(E_WARNING, "Replace failed: %s", djpt_last_error());
     RETURN_FALSE;
   }
   else
@@ -250,13 +282,19 @@ PHP_FUNCTION(djpt_remove)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_remove(handles[handle].info, row, column))
   {
+    if(errno != ENOENT)
+      zend_error(E_WARNING, "Remove failed: %s", djpt_last_error());
+
     RETURN_FALSE;
   }
   else
@@ -278,13 +316,19 @@ PHP_FUNCTION(djpt_has_key)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_has_key(handles[handle].info, row, column))
   {
+    if(errno != ENOENT)
+      zend_error(E_WARNING, "Has-key failed: %s", djpt_last_error());
+
     RETURN_FALSE;
   }
   else
@@ -310,13 +354,21 @@ PHP_FUNCTION(djpt_get)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   row = strndupa(row, row_len);
   column = strndupa(column, column_len);
 
   if(-1 == djpt_get(handles[handle].info, row, column, (void*) &result, &result_len))
+  {
+    if(errno != ENOENT)
+      zend_error(E_WARNING, "Getting of %s/%s failed: %s", row, column, djpt_last_error());
+
     RETURN_FALSE;
+  }
 
   RETVAL_STRINGL(result, result_len, 1);
 
@@ -346,7 +398,10 @@ PHP_FUNCTION(djpt_column_scan)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   column = strndupa(column, column_len);
 
@@ -384,7 +439,10 @@ PHP_FUNCTION(djpt_eval)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   program = strndupa(program, program_len);
 
@@ -392,6 +450,7 @@ PHP_FUNCTION(djpt_eval)
 
   if(-1 == djpt_eval(handles[handle].info, program, eval_callback, return_value))
   {
+    zend_error(E_WARNING, "Evail failed: %s", djpt_last_error());
     zend_hash_destroy(Z_ARRVAL_P(return_value));
     efree(Z_ARRVAL_P(return_value));
     RETURN_FALSE;
@@ -411,7 +470,10 @@ PHP_FUNCTION(djpt_get_counter)
   --handle;
 
   if(handle > sizeof(handles) / sizeof(handles[0]) || handle < 0 || !handles[handle].info)
+  {
+    zend_error(E_WARNING, "Invalid database handle %ld", handle);
     RETURN_FALSE;
+  }
 
   counter = strndupa(counter, counter_len);
 
