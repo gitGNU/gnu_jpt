@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <poll.h>
 
 #include <php.h>
 #include <php_ini.h>
 #include <ext/standard/info.h>
 
-#include "djpt.h"
+#include "../djpt/djpt.h"
+#include "../djpt/djpt_internal.h"
 
 #include "php-djpt.h"
 
@@ -86,18 +88,15 @@ PHP_FUNCTION(djpt_init)
     if(handles[result].refcount
     && !strcmp(handles[result].database, database))
     {
-      if(handlers[result].info)
+      if(handles[result].info)
       {
-        struct timespec to;
-        memset(&to, 0, sizeof(to));
+        struct pollfd pfd;
+        pfd.fd = handles[result].info->peer->fd;
+        pfd.events = 0;
+        pfd.revents = 0;
 
-        struct pollfd;
-        pollfd.fd = handles[result].info->peer->fd;
-        pollfd.events = 0;
-        pollfd.revents = 0;
-
-        if(0 < poll(&pollfd, 1, &to, 0, 0)
-        && 0 != (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)))
+        if(0 < poll(&pfd, 1, 0)
+        && 0 != (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)))
         {
           djpt_close(handles[result].info);
           handles[result].info = djpt_init(database);
