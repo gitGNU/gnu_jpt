@@ -288,6 +288,18 @@ DJPT_get_user_name()
 
   return result;
 }
+#ifndef DJPT_CLIENT
+int
+DJPT_write_eof(struct DJPT_peer* peer)
+{
+  struct DJPT_request eof;
+
+  eof.command = DJPT_REQ_EOF;
+  eof.size = htonl(sizeof(eof));
+
+  return DJPT_write_all(peer, &eof, sizeof(eof));
+}
+#endif
 
 void
 DJPT_peer_loop(struct DJPT_peer* peer, int flags)
@@ -344,18 +356,13 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(DJPT_jpt_handles[i].info
           && !strcmp(DJPT_jpt_handles[i].filename, open->filename))
           {
-            struct DJPT_request eof;
-
             ++DJPT_jpt_handles[i].refcount;
             peer->jpt_handle = i + 1;
             peer->db = DJPT_jpt_handles[i].info;
 
             pthread_mutex_unlock(&DJPT_jpt_handle_lock);
 
-            eof.command = DJPT_REQ_EOF;
-            eof.size = htonl(sizeof(eof));
-
-            if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
+            if(-1 == DJPT_write_eof(peer))
               goto done;
 
             break;
@@ -383,8 +390,6 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
         }
         else
         {
-          struct DJPT_request eof;
-
           for(i = 0; i < DJPT_jpt_handle_alloc; ++i)
             if(!DJPT_jpt_handles[i].info)
               break;
@@ -398,10 +403,7 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
 
           pthread_mutex_unlock(&DJPT_jpt_handle_lock);
 
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
+          if(-1 == DJPT_write_eof(peer))
             goto done;
         }
       }
@@ -428,16 +430,9 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else if(!(insert->flags & DJPT_IGNORE_RESULT))
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(!(insert->flags & DJPT_IGNORE_RESULT)
+                && -1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -455,16 +450,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -479,16 +466,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -506,16 +485,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -530,16 +501,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -591,16 +554,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -645,16 +600,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -667,16 +614,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;
@@ -689,16 +628,8 @@ DJPT_peer_loop(struct DJPT_peer* peer, int flags)
           if(-1 == DJPT_write_error(peer))
             goto done;
         }
-        else
-        {
-          struct DJPT_request eof;
-
-          eof.command = DJPT_REQ_EOF;
-          eof.size = htonl(sizeof(eof));
-
-          if(-1 == DJPT_write_all(peer, &eof, sizeof(eof)))
-            goto done;
-        }
+        else if(-1 == DJPT_write_eof(peer))
+          goto done;
       }
 
       break;

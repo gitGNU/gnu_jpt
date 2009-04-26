@@ -29,6 +29,13 @@
 #include "djpt.h"
 #include "djpt_internal.h"
 #include "jpt.h"
+#include "jpt_internal.h"
+
+/* #define TRACE(x) fprintf x ; fflush(stderr); */
+
+#ifndef TRACE
+#define TRACE(x)
+#endif
 
 const char*
 djpt_last_error()
@@ -263,6 +270,8 @@ djpt_init(const char* database)
   struct DJPT_peer* peer;
   int fd;
 
+  TRACE((stderr, "djpt_init(\"%s\")", database));
+
   DJPT_clear_error();
 
   if(strchr(database, ':'))
@@ -282,16 +291,16 @@ djpt_init(const char* database)
     {
       asprintf(&DJPT_last_error, "Only absolute paths are allowed");
 
-      return 0;
+      goto failure;
     }
 
     if(-1 == socketpair(AF_UNIX, SOCK_STREAM, 0, fds))
-      return 0;
+      goto failure;
 
     child = fork();
 
     if(child == -1)
-      return 0;
+      goto failure;
 
     if(!child)
     {
@@ -328,26 +337,26 @@ djpt_init(const char* database)
 
       waitpid(child, 0, 0);
 
-      return 0;
+      goto failure;
     }
 
     info = malloc(sizeof(struct DJPT_info));
     info->peer = peer;
 
-    return info;
+    goto failure;
   }
 
   if(database[0] != '/')
   {
     asprintf(&DJPT_last_error, "Only absolute paths are allowed");
 
-    return 0;
+    goto failure;
   }
 
   fd = DJPT_connect();
 
   if(fd == -1)
-    return 0;
+    goto failure;
 
   peer = malloc(sizeof(struct DJPT_peer));
   memset(peer, 0, sizeof(struct DJPT_peer));
@@ -358,18 +367,28 @@ djpt_init(const char* database)
     free(peer);
     close(fd);
 
-    return 0;
+    goto failure;
   }
 
   info = malloc(sizeof(struct DJPT_info));
   info->peer = peer;
 
+  TRACE((stderr, " = %p\n", info));
+
   return info;
+
+failure:
+
+  TRACE((stderr, " = 0 (%s)\n", djpt_last_error()));
+
+  return 0;
 }
 
 void
 djpt_close(struct DJPT_info* info)
 {
+  TRACE((stderr, "djpt_close(%p)\n", info));
+
   DJPT_clear_error();
 
   free(info->peer->read_buffer);
@@ -385,10 +404,12 @@ djpt_insert(struct DJPT_info* info,
             const void* value, size_t value_size, int flags)
 {
   struct DJPT_request_insert* insert;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t rowlen, columnlen;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_insert(%p, \"%s\", \"%s\", \"%.*s\", %zu, 0x%04x)", info, row, column, (int) value_size, (const char*) value, value_size, flags));
 
   DJPT_clear_error();
 
@@ -410,22 +431,16 @@ djpt_insert(struct DJPT_info* info,
   strcpy(insert->data + rowlen + 1, column);
   memcpy(insert->data + rowlen + 1 + columnlen + 1, value, value_size);
 
-  if(-1 == DJPT_write_all(info->peer, insert, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, insert, size)
+  && ((flags & DJPT_IGNORE_RESULT)
+      || (0 != (response = DJPT_read_request(info->peer))
+          && response->command == DJPT_REQ_EOF)))
+    res = 0;
 
   free(insert);
-
-  if(flags & DJPT_IGNORE_RESULT)
-    return 0;
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -434,10 +449,12 @@ int
 djpt_remove(struct DJPT_info* info, const char* row, const char* column)
 {
   struct DJPT_request_remove* remove;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t rowlen, columnlen;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_remove(%p, \"%s\", \"%s\")", info, row, column));
 
   DJPT_clear_error();
 
@@ -455,19 +472,15 @@ djpt_remove(struct DJPT_info* info, const char* row, const char* column)
   strcpy(remove->data, row);
   strcpy(remove->data + rowlen + 1, column);
 
-  if(-1 == DJPT_write_all(info->peer, remove, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, remove, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(remove);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -476,10 +489,12 @@ int
 djpt_remove_column(struct DJPT_info* info, const char* column, int flags)
 {
   struct DJPT_request_remove_column* remove;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t columnlen;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_remove_column(%p, \"%s\", 0x%04x)", info, column, flags));
 
   DJPT_clear_error();
 
@@ -494,19 +509,15 @@ djpt_remove_column(struct DJPT_info* info, const char* column, int flags)
   remove->flags = flags;
   strcpy(remove->column, column);
 
-  if(-1 == DJPT_write_all(info->peer, remove, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, remove, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(remove);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -514,7 +525,11 @@ djpt_remove_column(struct DJPT_info* info, const char* column, int flags)
 int
 djpt_create_column(struct DJPT_info* info, const char* column, int flags)
 {
+  TRACE((stderr, "djpt_create_column(%p, \"%s\", 0x%04x)", info, column, flags));
+
   DJPT_clear_error();
+
+  TRACE((stderr, " = %d\n", -1));
 
   return -1;
 }
@@ -523,10 +538,12 @@ int
 djpt_has_key(struct DJPT_info* info, const char* row, const char* column)
 {
   struct DJPT_request_has_key* has_key;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t rowlen, columnlen;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_has_key(%p, \"%s\", \"%s\")", info, row, column));
 
   DJPT_clear_error();
 
@@ -544,19 +561,15 @@ djpt_has_key(struct DJPT_info* info, const char* row, const char* column)
   strcpy(has_key->data, row);
   strcpy(has_key->data + rowlen + 1, column);
 
-  if(-1 == DJPT_write_all(info->peer, has_key, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, has_key, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(has_key);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -565,10 +578,12 @@ int
 djpt_has_column(struct DJPT_info* info, const char* column)
 {
   struct DJPT_request_has_column* has_column;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t columnlen;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_has_column(%p, \"%s\")", info, column));
 
   DJPT_clear_error();
 
@@ -582,19 +597,15 @@ djpt_has_column(struct DJPT_info* info, const char* column)
   has_column->size = htonl(size);
   strcpy(has_column->column, column);
 
-  if(-1 == DJPT_write_all(info->peer, has_column, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, has_column, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(has_column);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -608,6 +619,8 @@ djpt_get(struct DJPT_info* info, const char* row, const char* column,
   size_t rowlen, columnlen;
   size_t size;
   int res;
+
+  TRACE((stderr, "djpt_get(%p, \"%s\", \"%s\", %p, %p)", info, row, column, value, value_size));
 
   DJPT_clear_error();
 
@@ -629,7 +642,11 @@ djpt_get(struct DJPT_info* info, const char* row, const char* column,
   strcpy(get->data + rowlen + 1, column);
 
   if(-1 == DJPT_write_all(info->peer, get, size))
+  {
+    TRACE((stderr, " = -1 (%s)\n", djpt_last_error()));
+
     return -1;
+  }
 
   free(get);
 
@@ -655,6 +672,13 @@ djpt_get(struct DJPT_info* info, const char* row, const char* column,
   }
 
   free(response);
+
+  if(!res)
+  {
+    TRACE((stderr, " = \"%.*s\" (%zu bytes)\n", (int) *value_size, (const char*) *value, *value_size));
+  }
+  else
+    TRACE((stderr, " = -1\n"));
 
   return res;
 }
@@ -692,7 +716,11 @@ djpt_get_fixed(struct DJPT_info* info, const char* row, const char* column,
 int
 djpt_scan(struct DJPT_info* info, djpt_cell_callback callback, void* arg)
 {
+  TRACE((stderr, "djpt_scan(%p, %p, %p)", info, callback, arg));
+
   DJPT_clear_error();
+
+  TRACE((stderr, " = %d\n", -1));
 
   return -1;
 }
@@ -708,9 +736,11 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
   size_t size;
   int res = 0;
 
+  char* buf;
+  size_t max_size = 0, count = 0;
+
   char tempname[64];
   int tempfd;
-  struct JPT_info* tempdb;
 
   DJPT_clear_error();
 
@@ -744,25 +774,15 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
 
   tempfd = mkstemp(tempname);
 
-  tempdb = jpt_init(tempname, 1024 * 1024, 0);
-
-  if(!tempdb)
+  if(tempfd == -1)
   {
-    asprintf(&DJPT_last_error, "Failed to create temporary table for scanning: %s", jpt_last_error());
-
-    close(tempfd);
-    unlink(tempname);
-    strcat(tempname, ".log");
-    unlink(tempname);
+    asprintf(&DJPT_last_error, "Failed to create temporary file for scanning: %s", strerror(errno));
 
     free(response);
 
     return -1;
   }
 
-  close(tempfd);
-  unlink(tempname);
-  strcat(tempname, ".log");
   unlink(tempname);
 
   while(res == 0)
@@ -771,15 +791,27 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
     {
       if(response->command == DJPT_REQ_VALUE)
       {
+        struct iovec iv[2];
         struct DJPT_request_value* ret_value = (void*) response;
 
-        const char* row = ret_value->value;
-        const char* data = strchr(row, 0) + 1;
-        size_t size = ret_value->size - sizeof(struct DJPT_request_value) - (data - row);
+        uint32_t size = ret_value->size - sizeof(struct DJPT_request_value);
 
-        jpt_insert_timestamp(tempdb, row, column, data, size, &timestamp, 0);
+        iv[0].iov_base = &size;
+        iv[0].iov_len = sizeof(uint32_t);
+        iv[1].iov_base = ret_value->value;
+        iv[1].iov_len = size;
 
-        res = 0;
+        if(size > max_size)
+          max_size = size;
+
+        if(-1 == JPT_writev(tempfd, iv, 2))
+        {
+          asprintf(&DJPT_last_error, "Error writing to temporary file: %s", jpt_last_error());
+
+          res = -1;
+        }
+
+        ++count;
       }
       else if(response->command == DJPT_REQ_EOF)
       {
@@ -801,10 +833,74 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
     response = DJPT_read_request(info->peer);
   }
 
-  if(res == 0)
-    res = jpt_column_scan(tempdb, column, (jpt_cell_callback) callback, arg);
+  if(res == 0 && -1 == lseek(tempfd, 0, SEEK_SET))
+    res = -1;
 
-  jpt_close(tempdb);
+  if(res == 0)
+  {
+    uint32_t size;
+    const char* row_end;
+    size_t rowlen;
+
+    buf = malloc(max_size);
+
+    while(count--)
+    {
+      if(-1 == JPT_read_all(tempfd, &size, sizeof(uint32_t)))
+      {
+        asprintf(&DJPT_last_error, "Error reading temporary file: %s", jpt_last_error());
+        res = -1;
+
+        break;
+      }
+
+      if(size > max_size)
+      {
+        asprintf(&DJPT_last_error, "Temporary file corrupted");
+        res = -1;
+
+        break;
+      }
+
+      if(-1 == JPT_read_all(tempfd, buf, size))
+      {
+        asprintf(&DJPT_last_error, "Error reading temporary file: %s", jpt_last_error());
+        res = -1;
+
+        break;
+      }
+
+      row_end = memchr(buf, 0, size);
+
+      if(!row_end)
+      {
+        asprintf(&DJPT_last_error, "Temporary file corrupted");
+        res = -1;
+
+        break;
+      }
+
+      rowlen = row_end - buf;
+
+      switch(callback(buf, column, buf + rowlen + 1, size - rowlen - 1, &timestamp, arg))
+      {
+      case -1:
+
+        res = -1;
+        count = 0;
+
+        break;
+
+      case 1:
+
+        count = 0;
+
+        break;
+      }
+    }
+  }
+
+  close(tempfd);
 
   return res;
 }
@@ -906,9 +1002,11 @@ int
 djpt_compact(struct DJPT_info* info)
 {
   struct DJPT_request_compact* compact;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_compact(%p)", info));
 
   DJPT_clear_error();
 
@@ -918,19 +1016,15 @@ djpt_compact(struct DJPT_info* info)
   compact->command = DJPT_REQ_COMPACT;
   compact->size = htonl(size);
 
-  if(-1 == DJPT_write_all(info->peer, compact, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, compact, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(compact);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }
@@ -939,9 +1033,11 @@ int
 djpt_major_compact(struct DJPT_info* info)
 {
   struct DJPT_request_major_compact* major_compact;
-  struct DJPT_request* response;
+  struct DJPT_request* response = 0;
   size_t size;
-  int res;
+  int res = -1;
+
+  TRACE((stderr, "djpt_major_compact(%p)", info));
 
   DJPT_clear_error();
 
@@ -951,19 +1047,15 @@ djpt_major_compact(struct DJPT_info* info)
   major_compact->command = DJPT_REQ_MAJOR_COMPACT;
   major_compact->size = htonl(size);
 
-  if(-1 == DJPT_write_all(info->peer, major_compact, size))
-    return -1;
+  if(-1 != DJPT_write_all(info->peer, major_compact, size)
+  && 0 != (response = DJPT_read_request(info->peer))
+  && response->command == DJPT_REQ_EOF)
+    res = 0;
 
   free(major_compact);
-
-  response = DJPT_read_request(info->peer);
-
-  if(response && response->command == DJPT_REQ_EOF)
-    res = 0;
-  else
-    res = -1;
-
   free(response);
+
+  TRACE((stderr, " = %d\n", res));
 
   return res;
 }

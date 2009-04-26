@@ -999,7 +999,7 @@ jpt_compact(struct JPT_info* info)
 {
   int result;
 
-  TRACE((stderr, "jpt_compact(%p)\n", info));
+  TRACE((stderr, "jpt_compact(%p)", info));
 
   JPT_clear_error();
 
@@ -1008,6 +1008,8 @@ jpt_compact(struct JPT_info* info)
   result = JPT_compact(info);
 
   JPT_writer_leave(info);
+
+  TRACE((stderr, " = %d\n", result));
 
   return result;
 }

@@ -36,7 +36,7 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = jpt-control$(EXEEXT) djpt-control$(EXEEXT) \
 	djptd$(EXEEXT)
-noinst_PROGRAMS = stress-test$(EXEEXT)
+noinst_PROGRAMS = stress-test$(EXEEXT) djpt-stress-test$(EXEEXT)
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(include_HEADERS) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
@@ -86,6 +86,9 @@ PROGRAMS = $(bin_PROGRAMS) $(noinst_PROGRAMS)
 am_djpt_control_OBJECTS = djpt-control.$(OBJEXT)
 djpt_control_OBJECTS = $(am_djpt_control_OBJECTS)
 djpt_control_DEPENDENCIES = libdjpt.la
+am_djpt_stress_test_OBJECTS = djpt-stress-test.$(OBJEXT)
+djpt_stress_test_OBJECTS = $(am_djpt_stress_test_OBJECTS)
+djpt_stress_test_DEPENDENCIES = libdjpt.la
 am_djptd_OBJECTS = djptd.$(OBJEXT)
 djptd_OBJECTS = $(am_djptd_OBJECTS)
 djptd_DEPENDENCIES = libdjpt-common.la libjpt-common.la
@@ -109,12 +112,12 @@ LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	$(LDFLAGS) -o $@
 SOURCES = $(libdjpt_common_la_SOURCES) $(libdjpt_la_SOURCES) \
 	$(libjpt_common_la_SOURCES) $(libjpt_la_SOURCES) \
-	$(djpt_control_SOURCES) $(djptd_SOURCES) \
-	$(jpt_control_SOURCES) $(stress_test_SOURCES)
+	$(djpt_control_SOURCES) $(djpt_stress_test_SOURCES) \
+	$(djptd_SOURCES) $(jpt_control_SOURCES) $(stress_test_SOURCES)
 DIST_SOURCES = $(libdjpt_common_la_SOURCES) $(libdjpt_la_SOURCES) \
 	$(libjpt_common_la_SOURCES) $(libjpt_la_SOURCES) \
-	$(djpt_control_SOURCES) $(djptd_SOURCES) \
-	$(jpt_control_SOURCES) $(stress_test_SOURCES)
+	$(djpt_control_SOURCES) $(djpt_stress_test_SOURCES) \
+	$(djptd_SOURCES) $(jpt_control_SOURCES) $(stress_test_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -291,6 +294,8 @@ djpt_control_SOURCES = djpt-control.c
 djpt_control_LDADD = libdjpt.la
 stress_test_SOURCES = stress-test.c
 stress_test_LDADD = libjpt.la
+djpt_stress_test_SOURCES = djpt-stress-test.c
+djpt_stress_test_LDADD = libdjpt.la
 libjpt_la_SOURCES = 
 libjpt_common_la_SOURCES = \
 	libjpt/backup.c libjpt/disktable.c libjpt/jpt_internal.h \
@@ -301,10 +306,10 @@ libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
 libjpt_la_LIBADD = libjpt-common.la
 libdjpt_common_la_SOURCES = djpt/djpt_common.c 
 libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h
+libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0 -ljpt
+libdjpt_la_LIBADD = libdjpt-common.la
 djptd_SOURCES = djpt/djpt_internal.h djpt/djptd.c
 djptd_LDADD = libdjpt-common.la libjpt-common.la
-libdjpt_la_LIBADD = libdjpt-common.la -ljpt
-libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -442,6 +447,9 @@ clean-noinstPROGRAMS:
 djpt-control$(EXEEXT): $(djpt_control_OBJECTS) $(djpt_control_DEPENDENCIES) 
 	@rm -f djpt-control$(EXEEXT)
 	$(LINK) $(djpt_control_OBJECTS) $(djpt_control_LDADD) $(LIBS)
+djpt-stress-test$(EXEEXT): $(djpt_stress_test_OBJECTS) $(djpt_stress_test_DEPENDENCIES) 
+	@rm -f djpt-stress-test$(EXEEXT)
+	$(LINK) $(djpt_stress_test_OBJECTS) $(djpt_stress_test_LDADD) $(LIBS)
 djptd$(EXEEXT): $(djptd_OBJECTS) $(djptd_DEPENDENCIES) 
 	@rm -f djptd$(EXEEXT)
 	$(LINK) $(djptd_OBJECTS) $(djptd_LDADD) $(LIBS)
@@ -461,6 +469,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backup.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/disktable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt-control.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt-stress-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djptd.Po@am__quote@
