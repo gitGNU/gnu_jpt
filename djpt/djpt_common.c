@@ -268,25 +268,12 @@ DJPT_release_jpt_handle(struct DJPT_jpt_handle* handle)
 char*
 DJPT_get_user_name()
 {
-  char* result = 0;
-  uid_t euid;
   struct passwd* pwent;
 
-  euid = getuid();
+  if(0 != (pwent = getpwuid(getuid())))
+    return strdup(pwent->pw_name);
 
-  while(0 != (pwent = getpwent()))
-  {
-    if(pwent->pw_uid == euid)
-    {
-      result = strdup(pwent->pw_name);
-
-      break;
-    }
-  }
-
-  endpwent();
-
-  return result;
+  return 0;
 }
 #ifndef DJPT_CLIENT
 int

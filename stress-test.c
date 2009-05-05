@@ -153,9 +153,18 @@ cell_callback(const char* row, const char* column, const void* data, size_t data
     if(!strcmp(tokens[ncolumn], column))
       break;
 
-  if(data_size > values[nrow][ncolumn].size)
+  if(data_size != values[nrow][ncolumn].size)
   {
+    void* value;
+    size_t value_size;
+
     fprintf(stderr, "\"%s\", \"%s\": %d bytes in database, wanted %d\n", row, column, (int) data_size, (int) values[nrow][ncolumn].size);
+
+    if(0 == jpt_get(db, row, column, &value, &value_size))
+      fprintf(stderr, "Was %zu bytes when fetched by jpt_get\n", value_size);
+    else
+      fprintf(stderr, "jpt_get failed: %s\n", jpt_last_error());
+
     abort();
   }
 

@@ -2629,6 +2629,8 @@ restart:
     size_t equal_size = 0;
     size_t keylen = 0;
 
+    struct JPT_node_data* d;
+
     for(i = 0; i < cursor_count; ++i)
     {
       if(!min)
@@ -2665,7 +2667,9 @@ restart:
         min = (*iterator)->row;
         minidx = (uint32_t) ~0;
         keylen = strlen((*iterator)->row) + 1;
-        equal_size = (*iterator)->data.value_size;
+
+        for(d = &(*iterator)->data; d; d = d->next)
+          equal_size += d->value_size;
       }
       else
       {
@@ -2677,12 +2681,16 @@ restart:
           minidx = (uint32_t) ~0;
           equal_count = 1;
           keylen = strlen((*iterator)->row) + 1;
-          equal_size = (*iterator)->data.value_size;
+
+          equal_size = 0;
+          for(d = &(*iterator)->data; d; d = d->next)
+            equal_size += d->value_size;
         }
         else if(cmp == 0)
         {
           ++equal_count;
-          equal_size += (*iterator)->data.value_size;
+          for(d = &(*iterator)->data; d; d = d->next)
+            equal_size += d->value_size;
         }
       }
     }
@@ -2720,8 +2728,12 @@ restart:
         assert(equal_count == 1);
         assert(!strcmp((*iterator)->row, min));
 
-        memcpy(o, (*iterator)->data.value, (*iterator)->data.value_size);
-        o += (*iterator)->data.value_size;
+        for(d = &(*iterator)->data; d; d = d->next)
+        {
+          memcpy(o, d->value, d->value_size);
+          o += d->value_size;
+        }
+
         ++iterator;
       }
 
@@ -2784,11 +2796,14 @@ restart:
       else
       {
         uint64_t timestamp;
-        size_t size;
+        size_t size = 0;
 
-        size = (*iterator)->data.value_size;
+        for(d = &(*iterator)->data; d; d = d->next)
+        {
+          memcpy(cat_buffer + size, d->value, d->value_size);
+          size += d->value_size;
+        }
 
-        memcpy(cat_buffer, (*iterator)->data.value, size);
         memcpy(cat_buffer + size, (*iterator)->row, keylen);
         timestamp = (*iterator)->timestamp;
 

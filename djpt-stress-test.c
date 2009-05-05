@@ -147,7 +147,7 @@ cell_callback(const char* row, const char* column, const void* data, size_t data
     if(!strcmp(tokens[ncolumn], column))
       break;
 
-  if(data_size > values[nrow][ncolumn].size)
+  if(data_size != values[nrow][ncolumn].size)
   {
     fprintf(stderr, "\"%s\", \"%s\": %d bytes in database, wanted %d\n", row, column, (int) data_size, (int) values[nrow][ncolumn].size);
     abort();
