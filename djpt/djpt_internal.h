@@ -234,6 +234,12 @@ DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size);
 ssize_t
 DJPT_write_all(struct DJPT_peer* peer, const void* target, size_t size);
 
+ssize_t
+JPT_read_all_fd(int fd, void* target, size_t size);
+
+ssize_t
+DJPT_writev(int fd, const struct iovec *iov, int iovcnt);
+
 char*
 DJPT_get_user_name();
 

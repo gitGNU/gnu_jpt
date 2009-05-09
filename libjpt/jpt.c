@@ -1483,6 +1483,7 @@ jpt_insert_timestamp(struct JPT_info* info,
   if(res == 0 && !info->replaying)
   {
     struct iovec iov[4];
+    size_t iovn = 0;
     int rowlen = strlen(row);
     int collen = strlen(column);
 
@@ -1500,14 +1501,16 @@ jpt_insert_timestamp(struct JPT_info* info,
     JPT_log_append_uint(info, value_size);
     JPT_log_append_uint64(info, *timestamp);
 
-    IOV_SET(iov, 0, info->logbuf, info->logbuf_fill);
-    IOV_SET(iov, 1, row, rowlen);
-    IOV_SET(iov, 2, column, collen);
-    IOV_SET(iov, 3, value, value_size);
+    IOV_SET(iov, iovn++, info->logbuf, info->logbuf_fill);
+    IOV_SET(iov, iovn++, row, rowlen);
+    IOV_SET(iov, iovn++, column, collen);
+
+    if(value_size)
+      IOV_SET(iov, iovn++, value, value_size);
 
     info->logbuf_fill = 0;
 
-    if(-1 == JPT_writev(info->logfd, iov, 4))
+    if(-1 == JPT_writev(info->logfd, iov, iovn))
     {
       JPT_writer_leave(info);
 

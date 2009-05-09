@@ -62,11 +62,8 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
 	"$(DESTDIR)$(includedir)"
 libLTLIBRARIES_INSTALL = $(INSTALL)
 LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
-libdjpt_common_la_LIBADD =
-am_libdjpt_common_la_OBJECTS = djpt_common.lo
-libdjpt_common_la_OBJECTS = $(am_libdjpt_common_la_OBJECTS)
-libdjpt_la_DEPENDENCIES = libdjpt-common.la
-am_libdjpt_la_OBJECTS = djpt.lo
+libdjpt_la_LIBADD =
+am_libdjpt_la_OBJECTS = libdjpt_la-djpt.lo libdjpt_la-djpt_common.lo
 libdjpt_la_OBJECTS = $(am_libdjpt_la_OBJECTS)
 libdjpt_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
@@ -89,9 +86,9 @@ djpt_control_DEPENDENCIES = libdjpt.la
 am_djpt_stress_test_OBJECTS = djpt-stress-test.$(OBJEXT)
 djpt_stress_test_OBJECTS = $(am_djpt_stress_test_OBJECTS)
 djpt_stress_test_DEPENDENCIES = libdjpt.la
-am_djptd_OBJECTS = djptd.$(OBJEXT)
+am_djptd_OBJECTS = djptd.$(OBJEXT) djpt_common.$(OBJEXT)
 djptd_OBJECTS = $(am_djptd_OBJECTS)
-djptd_DEPENDENCIES = libdjpt-common.la libjpt-common.la
+djptd_DEPENDENCIES = libjpt-common.la
 am_jpt_control_OBJECTS = jpt-control.$(OBJEXT)
 jpt_control_OBJECTS = $(am_jpt_control_OBJECTS)
 jpt_control_DEPENDENCIES = libjpt.la
@@ -110,14 +107,14 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(libdjpt_common_la_SOURCES) $(libdjpt_la_SOURCES) \
-	$(libjpt_common_la_SOURCES) $(libjpt_la_SOURCES) \
-	$(djpt_control_SOURCES) $(djpt_stress_test_SOURCES) \
-	$(djptd_SOURCES) $(jpt_control_SOURCES) $(stress_test_SOURCES)
-DIST_SOURCES = $(libdjpt_common_la_SOURCES) $(libdjpt_la_SOURCES) \
-	$(libjpt_common_la_SOURCES) $(libjpt_la_SOURCES) \
-	$(djpt_control_SOURCES) $(djpt_stress_test_SOURCES) \
-	$(djptd_SOURCES) $(jpt_control_SOURCES) $(stress_test_SOURCES)
+SOURCES = $(libdjpt_la_SOURCES) $(libjpt_common_la_SOURCES) \
+	$(libjpt_la_SOURCES) $(djpt_control_SOURCES) \
+	$(djpt_stress_test_SOURCES) $(djptd_SOURCES) \
+	$(jpt_control_SOURCES) $(stress_test_SOURCES)
+DIST_SOURCES = $(libdjpt_la_SOURCES) $(libjpt_common_la_SOURCES) \
+	$(libjpt_la_SOURCES) $(djpt_control_SOURCES) \
+	$(djpt_stress_test_SOURCES) $(djptd_SOURCES) \
+	$(jpt_control_SOURCES) $(stress_test_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -254,7 +251,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 lib_LTLIBRARIES = libjpt.la libdjpt.la
 include_HEADERS = libjpt/jpt.h djpt/djpt.h
-noinst_LTLIBRARIES = libjpt-common.la libdjpt-common.la
+noinst_LTLIBRARIES = libjpt-common.la
 SUBDIRS = tests $(MAYBE_PHP)
 DIST_SUBDIRS = tests
 EXTRA_DIST = \
@@ -304,12 +301,11 @@ libjpt_common_la_SOURCES = \
 
 libjpt_la_LDFLAGS = -no-undefined -version-info 1:0:1
 libjpt_la_LIBADD = libjpt-common.la
-libdjpt_common_la_SOURCES = djpt/djpt_common.c 
-libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h
-libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0 -ljpt
-libdjpt_la_LIBADD = libdjpt-common.la
-djptd_SOURCES = djpt/djpt_internal.h djpt/djptd.c
-djptd_LDADD = libdjpt-common.la libjpt-common.la
+djptd_SOURCES = djpt/djpt_internal.h djpt/djptd.c djpt/djpt_common.c
+djptd_LDADD = libjpt-common.la
+libdjpt_la_CPPFLAGS = $(AM_CPPFLAGS) -DDJPT_CLIENT=1
+libdjpt_la_SOURCES = djpt/djpt.c djpt/djpt_internal.h djpt/djpt.h djpt/djpt_common.c
+libdjpt_la_LDFLAGS = -no-undefined -version-info 0:0:0
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -401,8 +397,6 @@ clean-noinstLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
-libdjpt-common.la: $(libdjpt_common_la_OBJECTS) $(libdjpt_common_la_DEPENDENCIES) 
-	$(LINK)  $(libdjpt_common_la_OBJECTS) $(libdjpt_common_la_LIBADD) $(LIBS)
 libdjpt.la: $(libdjpt_la_OBJECTS) $(libdjpt_la_DEPENDENCIES) 
 	$(libdjpt_la_LINK) -rpath $(libdir) $(libdjpt_la_OBJECTS) $(libdjpt_la_LIBADD) $(LIBS)
 libjpt-common.la: $(libjpt_common_la_OBJECTS) $(libjpt_common_la_DEPENDENCIES) 
@@ -470,12 +464,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/disktable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt-control.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt-stress-test.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt_common.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djpt_common.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/djptd.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt-control.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jpt.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdjpt_la-djpt.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdjpt_la-djpt_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memtable.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/patricia.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/script.Plo@am__quote@
@@ -502,19 +497,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
 
-djpt_common.lo: djpt/djpt_common.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT djpt_common.lo -MD -MP -MF $(DEPDIR)/djpt_common.Tpo -c -o djpt_common.lo `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/djpt_common.Tpo $(DEPDIR)/djpt_common.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt_common.c' object='djpt_common.lo' libtool=yes @AMDEPBACKSLASH@
+libdjpt_la-djpt.lo: djpt/djpt.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdjpt_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdjpt_la-djpt.lo -MD -MP -MF $(DEPDIR)/libdjpt_la-djpt.Tpo -c -o libdjpt_la-djpt.lo `test -f 'djpt/djpt.c' || echo '$(srcdir)/'`djpt/djpt.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/libdjpt_la-djpt.Tpo $(DEPDIR)/libdjpt_la-djpt.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt.c' object='libdjpt_la-djpt.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djpt_common.lo `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdjpt_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdjpt_la-djpt.lo `test -f 'djpt/djpt.c' || echo '$(srcdir)/'`djpt/djpt.c
 
-djpt.lo: djpt/djpt.c
-@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT djpt.lo -MD -MP -MF $(DEPDIR)/djpt.Tpo -c -o djpt.lo `test -f 'djpt/djpt.c' || echo '$(srcdir)/'`djpt/djpt.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/djpt.Tpo $(DEPDIR)/djpt.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt.c' object='djpt.lo' libtool=yes @AMDEPBACKSLASH@
+libdjpt_la-djpt_common.lo: djpt/djpt_common.c
+@am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdjpt_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdjpt_la-djpt_common.lo -MD -MP -MF $(DEPDIR)/libdjpt_la-djpt_common.Tpo -c -o libdjpt_la-djpt_common.lo `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/libdjpt_la-djpt_common.Tpo $(DEPDIR)/libdjpt_la-djpt_common.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt_common.c' object='libdjpt_la-djpt_common.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djpt.lo `test -f 'djpt/djpt.c' || echo '$(srcdir)/'`djpt/djpt.c
+@am__fastdepCC_FALSE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdjpt_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdjpt_la-djpt_common.lo `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
 
 backup.lo: libjpt/backup.c
 @am__fastdepCC_TRUE@	$(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT backup.lo -MD -MP -MF $(DEPDIR)/backup.Tpo -c -o backup.lo `test -f 'libjpt/backup.c' || echo '$(srcdir)/'`libjpt/backup.c
@@ -578,6 +573,20 @@ djptd.obj: djpt/djptd.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djptd.c' object='djptd.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djptd.obj `if test -f 'djpt/djptd.c'; then $(CYGPATH_W) 'djpt/djptd.c'; else $(CYGPATH_W) '$(srcdir)/djpt/djptd.c'; fi`
+
+djpt_common.o: djpt/djpt_common.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT djpt_common.o -MD -MP -MF $(DEPDIR)/djpt_common.Tpo -c -o djpt_common.o `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/djpt_common.Tpo $(DEPDIR)/djpt_common.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt_common.c' object='djpt_common.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djpt_common.o `test -f 'djpt/djpt_common.c' || echo '$(srcdir)/'`djpt/djpt_common.c
+
+djpt_common.obj: djpt/djpt_common.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT djpt_common.obj -MD -MP -MF $(DEPDIR)/djpt_common.Tpo -c -o djpt_common.obj `if test -f 'djpt/djpt_common.c'; then $(CYGPATH_W) 'djpt/djpt_common.c'; else $(CYGPATH_W) '$(srcdir)/djpt/djpt_common.c'; fi`
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/djpt_common.Tpo $(DEPDIR)/djpt_common.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='djpt/djpt_common.c' object='djpt_common.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o djpt_common.obj `if test -f 'djpt/djpt_common.c'; then $(CYGPATH_W) 'djpt/djpt_common.c'; else $(CYGPATH_W) '$(srcdir)/djpt/djpt_common.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

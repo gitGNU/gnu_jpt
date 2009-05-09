@@ -89,6 +89,9 @@ djpt_eval(struct DJPT_info* info, const char* program,
           djpt_eval_callback callback, void* arg);
 
 uint64_t
+djpt_gettime();
+
+uint64_t
 djpt_get_counter(struct DJPT_info* info, const char* name);
 
 int

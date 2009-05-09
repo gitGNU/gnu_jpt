@@ -20,18 +20,18 @@
 #include <netinet/tcp.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 #include "djpt.h"
 #include "djpt_internal.h"
-#include "jpt.h"
-#include "jpt_internal.h"
 
-/* #define TRACE(x) fprintf x ; fflush(stderr); */
+#define TRACE(x) fprintf x ; fflush(stderr);
 
 #ifndef TRACE
 #define TRACE(x)
@@ -261,6 +261,16 @@ DJPT_connect()
   }
 
   return fd;
+}
+
+uint64_t
+djpt_gettime()
+{
+  struct timeval tv;
+
+  gettimeofday(&tv, 0);
+
+  return tv.tv_usec + tv.tv_sec * 1000000ULL;
 }
 
 struct DJPT_info*
@@ -754,7 +764,7 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
   column_scan->size = htonl(size);
   strcpy(column_scan->column, column);
 
-  timestamp = jpt_gettime();
+  timestamp = djpt_gettime();
 
   if(-1 == DJPT_write_all(info->peer, column_scan, size))
     return -1;
@@ -804,9 +814,9 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
         if(size > max_size)
           max_size = size;
 
-        if(-1 == JPT_writev(tempfd, iv, 2))
+        if(-1 == DJPT_writev(tempfd, iv, 2))
         {
-          asprintf(&DJPT_last_error, "Error writing to temporary file: %s", jpt_last_error());
+          asprintf(&DJPT_last_error, "Error writing to temporary file: %s", djpt_last_error());
 
           res = -1;
         }
@@ -846,9 +856,9 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
 
     while(count--)
     {
-      if(-1 == JPT_read_all(tempfd, &size, sizeof(uint32_t)))
+      if(-1 == DJPT_read_all_fd(tempfd, &size, sizeof(uint32_t)))
       {
-        asprintf(&DJPT_last_error, "Error reading temporary file: %s", jpt_last_error());
+        asprintf(&DJPT_last_error, "Error reading temporary file: %s", djpt_last_error());
         res = -1;
 
         break;
@@ -862,9 +872,9 @@ djpt_column_scan(struct DJPT_info* info, const char* column,
         break;
       }
 
-      if(-1 == JPT_read_all(tempfd, buf, size))
+      if(-1 == DJPT_read_all_fd(tempfd, buf, size))
       {
-        asprintf(&DJPT_last_error, "Error reading temporary file: %s", jpt_last_error());
+        asprintf(&DJPT_last_error, "Error reading temporary file: %s", djpt_last_error());
         res = -1;
 
         break;

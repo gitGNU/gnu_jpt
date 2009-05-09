@@ -42,6 +42,32 @@ __thread int DJPT_errno = 0;
 __thread char* DJPT_last_error = 0;
 
 ssize_t
+DJPT_read_all_fd(int fd, void* target, size_t size)
+{
+  size_t remaining = size;
+  char* o = target;
+
+  while(remaining)
+  {
+    ssize_t res = read(fd, o, remaining);
+
+    if(res <= 0)
+    {
+      if(!res)
+        asprintf(&DJPT_last_error, "Tried to read %zu bytes, got %zu", size, size - remaining);
+
+      return -1;
+    }
+
+    o += res;
+    remaining -= res;
+  }
+
+  return size;
+}
+
+
+ssize_t
 DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size)
 {
   size_t remaining = size;
@@ -96,6 +122,40 @@ DJPT_read_all(struct DJPT_peer* peer, void* target, size_t size)
   }
 
   return size;
+}
+
+ssize_t
+DJPT_writev(int fd, const struct iovec *iov, int iovcnt)
+{
+  size_t size = 0;
+  ssize_t ret;
+  int i;
+
+  for(i = 0; i < iovcnt; ++i)
+  {
+    assert(iov[i].iov_base);
+    assert(iov[i].iov_len);
+
+    size += iov[i].iov_len;
+  }
+
+  ret = writev(fd, iov, iovcnt);
+
+  if(ret == -1)
+  {
+    asprintf(&DJPT_last_error, "Vector write failed: %s", strerror(errno));
+
+    return -1;
+  }
+
+  if(ret < size)
+  {
+    asprintf(&DJPT_last_error, "Tried to write %zu bytes, but writev returned after %zu", size, ret);
+
+    return -1;
+  }
+
+  return 0;
 }
 
 #ifndef DJPT_CLIENT
@@ -291,7 +351,9 @@ DJPT_write_eof(struct DJPT_peer* peer)
 void
 DJPT_peer_loop(struct DJPT_peer* peer, int flags)
 {
+#ifndef DJPT_CLIENT
   size_t i;
+#endif
   struct DJPT_request* request = 0;
 
   for(;;)
